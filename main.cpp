@@ -1,29 +1,8 @@
 #include <iostream>
 #include <vector>
 #include <cstdint>
+#include "defs.h"
 
-typedef uint64_t U64;
-
-#define get_bit(bitboard, square) ((bitboard) & (1ULL << square))
-#define set_bit(bitboard, square) ((bitboard) |= (1ULL << square))
-#define pop_bit(bitboard, square) ((bitboard) &=  ~(1ULL << square))
-
-enum {
-    a1, b1, c1, d1, e1, f1, g1, h1,
-    a2, b2, c2, d2, e2, f2, g2, h2,
-    a3, b3, c3, d3, e3, f3, g3, h3,
-    a4, b4, c4, d4, e4, f4, g4, h4,
-    a5, b5, c5, d5, e5, f5, g5, h5,
-    a6, b6, c6, d6, e6, f6, g6, h6,
-    a7, b7, c7, d7, e7, f7, g7, h7,
-    a8, b8, c8, d8, e8, f8, g8, h8
-};
-
-enum { P, N, B, R, Q, K, p, n, b, r, q, k };
-
-enum { WHITE, BLACK };
-
-enum { WK = 1, WQ = 2, BK = 4, BQ = 8 };
 
 class Board {
 public:
@@ -31,7 +10,7 @@ public:
     U64 bitboards[12];
 
     // [0] - White, [1] - Black, [2] - All
-    U64 uccupancies[3];
+    U64 occupancies[3];
 
     // 0 - White, 1 - Black
     int side = 0;
@@ -45,8 +24,29 @@ public:
     // 4 (0100) - White king (BK) can short castle
     // 8 (1000) - White king (BQ) can long castle
     int castle = 15;
+
+    Board() {
+        for (int i = 0; i < 12; i++) bitboards[i] = 0ULL;
+        for (int i = 0; i < 3; i++) occupancies[i] = 0ULL;
+
+        init_start_position();
+    }
+
+    void init_start_position() {
+        for (int sq = a2; sq <= h2; sq++) {
+            set_bit(bitboards[P], sq);
+        }
+
+    }
+
+    void print_bitboard(U64 bb) {
+
+    }
+
 };
 
 int main() {
+    Board chess;
 
+    return 0;
 }
