@@ -9,6 +9,9 @@ typedef uint64_t U64;
 #define set_bit(bitboard, square) ((bitboard) |= (1ULL << (square)))
 #define pop_bit(bitboard, square) ((bitboard) &= ~(1ULL << (square)))
 
+#define ROW(x) (x >> 3)
+#define COL(x) (x & 7)
+
 #if defined(_MSC_VER)
 // Code for Visual Studio (Windows)
 #include <intrin.h>
