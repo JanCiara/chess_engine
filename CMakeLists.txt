@@ -4,4 +4,6 @@ project(chess_engine)
 set(CMAKE_CXX_STANDARD 26)
 
 add_executable(chess_engine main.cpp
-        defs.h)
+        defs.h
+        board.h
+        board.cpp)
