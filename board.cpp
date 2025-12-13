@@ -2,14 +2,37 @@
 #include <iostream>
 #include <cstring>
 
+#include "movegen.h"
+
 Board::Board() {
     init_start_position();
     update_occupancies();
 }
 
+
+U64 Board::noNoEa(const U64 b) { return (b & notHFile) << 17; }
+U64 Board::noEaEa(const U64 b) { return (b & notGHFile) << 10; }
+U64 Board::soEaEa(const U64 b) { return (b & notGHFile) >> 6; }
+U64 Board::soSoEa(const U64 b) { return (b & notHFile) >> 15; }
+
+U64 Board::noNoWe(const U64 b) { return (b & notAFile) << 15; }
+U64 Board::noWeWe(const U64 b) { return (b & notABFile) << 6; }
+U64 Board::soWeWe(const U64 b) { return (b & notABFile) >> 10; }
+U64 Board::soSoWe(const U64 b) { return (b & notAFile) >> 17; }
+
+U64 Board::noOne(const U64 b) { return b << 8; }
+U64 Board::eaOne(const U64 b) { return (b & notHFile) << 1; }
+U64 Board::weOne(const U64 b) { return (b & notAFile) >> 1; }
+U64 Board::soOne(const U64 b) { return b >> 8; }
+U64 Board::noEaOne(const U64 b) { return (b & notHFile) << 9; }
+U64 Board::noWeOne(const U64 b) { return (b & notAFile) << 7; }
+U64 Board::soWeOne(const U64 b) { return (b & notAFile) >> 9; }
+U64 Board::soEaOne(const U64 b) { return (b & notHFile) >> 7; }
+
+
 int Board::sq_to_int(const std::string &square) {
-    int file = square[0] - 'a'; // 'e' - 'a' = 4
-    int rank = square[1] - '1'; // '4' - '1' = 3
+    const int file = square[0] - 'a'; // 'e' - 'a' = 4
+    const int rank = square[1] - '1'; // '4' - '1' = 3
 
     return rank * 8 + file; // 3 * 8 + 4 = 28
 }
@@ -17,8 +40,8 @@ int Board::sq_to_int(const std::string &square) {
 std::string Board::int_to_sq(int square) {
     std::string s;
 
-    int file = square % 8;
-    int rank = square / 8;
+    const int file = square % 8;
+    const int rank = square / 8;
 
     s += ('a' + file);
     s += ('1' + rank);
@@ -56,6 +79,33 @@ void Board::init_start_position() {
     set_bit(bitboards[b], f8);
     set_bit(bitboards[q], d8);
     set_bit(bitboards[k], e8);
+
+    // Knight moves
+    for (int sq = 0; sq < 64; sq++) {
+        const U64 bb = 1ULL << sq;
+
+        KnightAttacks[sq] = noNoEa(bb) | noEaEa(bb) |
+                            soEaEa(bb) | soSoEa(bb) |
+                            noNoWe(bb) | noWeWe(bb) |
+                            soWeWe(bb) | soSoWe(bb);
+    }
+
+    // King moves
+    for (int sq = 0; sq < 64; sq++) {
+        const U64 bb = 1ULL << sq;
+
+        KingAttacks[sq] = noOne(bb) | eaOne(bb) | weOne(bb) | soOne(bb) |
+                          noEaOne(bb) | noWeOne(bb) |
+                          soEaOne(bb) | soWeOne(bb);
+    }
+
+    // Pawn Attacks
+    for (int sq = 0; sq < 64; sq++) {
+        const U64 bb = 1ULL < sq;
+
+        BlackPawnAttacks[sq] = soEaOne(bb) | soWeOne(bb);
+        WhitePawnAttacks[sq] = noEaOne(bb) | noWeOne(bb);
+    }
 }
 
 void Board::update_occupancies() {
@@ -115,10 +165,9 @@ void Board::print_board() const {
     std::cout << "     EnPassant: " << ((en_passant == -1) ? "-" : int_to_sq(en_passant)) << "\n";
     std::cout << "     Castling: " << ((castle & WK) ? 'K' : '-') << ((castle & WQ) ? 'Q' : '-')
             << ((castle & BK) ? 'k' : '-') << ((castle & BQ) ? 'q' : '-') << "\n";
-    std::cout << "     Timers: "<< "Halfmove counter: " << half_move_clock << "\n"
-                    << "             Fullmove counter: " << full_move_counter << "\n\n";
+    std::cout << "     Timers: " << "Halfmove counter: " << half_move_clock << "\n"
+            << "             Fullmove counter: " << full_move_counter << "\n\n";
 }
-
 
 
 void Board::parseFEN(const std::string &fen) {
