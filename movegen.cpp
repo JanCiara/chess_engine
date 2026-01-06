@@ -345,3 +345,6 @@ U64 get_rook_attacks(int square, U64 occupancy) {
 U64 get_queen_attacks(int square, U64 occupancy) {
     return get_bishop_attacks(square, occupancy) | get_rook_attacks(square, occupancy);
 }
+
+void generate_moves(const Board *board, Moves *move_list) {
+}

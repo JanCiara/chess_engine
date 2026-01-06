@@ -72,3 +72,41 @@ constexpr U64 notAFile  = 0xFEFEFEFEFEFEFEFEULL;
 constexpr U64 notABFile = 0xFCFCFCFCFCFCFCFCULL;
 constexpr U64 notHFile  = 0x7F7F7F7F7F7F7F7FULL;
 constexpr U64 notGHFile = 0x3F3F3F3F3F3F3F3FULL;
+
+/*
+    Kodowanie ruchu w 32-bitowym int:
+    0000 0000 0000 0000 0011 1111   Source Square (0-63)
+    0000 0000 0000 1111 1100 0000   Target Square (0-63)
+    0000 0000 1111 0000 0000 0000   Piece (co ruszamy)
+    0000 1111 0000 0000 0000 0000   Promoted Piece (na co promujemy)
+    0001 0000 0000 0000 0000 0000   Capture Flag (czy bicie)
+    0010 0000 0000 0000 0000 0000   Double Push (pion o 2 pola)
+    0100 0000 0000 0000 0000 0000   En Passant
+    1000 0000 0000 0000 0000 0000   Castling
+*/
+
+#define encode_move(source, target, piece, promoted, capture, double_push, enpassant, castling) (\
+(source) | \
+((target) << 6) | \
+((piece) << 12) | \
+((promoted) << 16) | \
+((capture) << 20) | \
+((double_push) << 21) | \
+((enpassant) << 22) | \
+((castling) << 23))
+
+// Makra do odczytu
+#define get_move_source(move)      ((move) & 0x3f)
+#define get_move_target(move)      (((move) >> 6) & 0x3f)
+#define get_move_piece(move)       (((move) >> 12) & 0xf)
+#define get_move_promoted(move)    (((move) >> 16) & 0xf)
+#define get_move_capture(move)     ((move) & (1 << 20))
+#define get_move_double(move)      ((move) & (1 << 21))
+#define get_move_enpassant(move)   ((move) & (1 << 22))
+#define get_move_castling(move)    ((move) & (1 << 23))
+
+// Struktura listy ruchów
+struct Moves {
+    int moves[256];
+    int count = 0;
+};

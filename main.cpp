@@ -3,23 +3,28 @@
 #include "movegen.h"
 
 int main() {
-    // 1. Inicjalizacja tablic
     init_all_attacks();
 
-    // 2. Ustawiamy testową sytuację
     Board chess;
-    chess.parseFEN("8/8/8/3p4/3R4/8/3P4/8 w - - 0 1");
-    // Wieża na D4, Pion czarny na D5, Pion biały na D2 -> Wieża powinna widzieć ruchy tylko między nimi.
-
-    std::cout << "--- TEST MAGIC BITBOARDS ---\n";
+    // Ustawiamy piona na E2 i piona na A7 (blisko promocji)
+    chess.parseFEN("8/P7/8/8/8/8/4P3/8 w - - 0 1");
     chess.print_board();
 
-    // 3. Pobieramy ataki wieży z pola D4 (index 27)
-    // UWAGA: occupancies[2] to bitboard obu kolorów (wszystkie blokery)
-    U64 attacks = get_rook_attacks(d4, chess.occupancies[2]);
+    Moves move_list[1];
+    generate_moves(&chess, move_list);
 
-    std::cout << "Ataki wiezy z pola d4:\n";
-    Board::print_bitboard(attacks);
+    std::cout << "Znaleziono ruchow: " << move_list->count << "\n";
+
+    // Wypisz szczegóły ruchów (dekodowanie)
+    for (int i = 0; i < move_list->count; i++) {
+        int move = move_list->moves[i];
+        std::cout << "Ruch: "
+                  << Board::int_to_sq(get_move_source(move))
+                  << Board::int_to_sq(get_move_target(move))
+                  << " Promocja? " << (get_move_promoted(move) ? "TAK" : "NIE")
+                  << " Double? " << (get_move_double(move) ? "TAK" : "NIE")
+                  << "\n";
+    }
 
     return 0;
 }
