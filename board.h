@@ -27,11 +27,6 @@ public:
     int full_move_counter = 0;
     int half_move_clock = 0;
 
-    U64 KnightAttacks[64];
-    U64 KingAttacks[64];
-    U64 WhitePawnAttacks[64];
-    U64 BlackPawnAttacks[64];
-
     static constexpr char ascii_pieces[12] = {'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k'};
 
     inline static const std::unordered_map<char, int> ascii_to_int = {
@@ -60,27 +55,5 @@ public:
     // Helper functions
     static int sq_to_int(const std::string &square);
     static std::string int_to_sq(int square);
-
-    // For generating knight moves
-    static U64 noNoEa(U64 b);
-    static U64 noEaEa(U64 b);
-    static U64 soSoEa(U64 b);
-    static U64 soEaEa(U64 b);
-    
-    static U64 noNoWe(U64 b);
-    static U64 noWeWe(U64 b);
-    static U64 soWeWe(U64 b);
-    static U64 soSoWe(U64 b);
-
-    // For generating king moves
-    static U64 noOne(U64 b);
-    static U64 eaOne(U64 b);
-    static U64 weOne(U64 b);
-    static U64 soOne(U64 b);
-
-    static U64 noEaOne(U64 b);
-    static U64 noWeOne(U64 b);
-    static U64 soEaOne(U64 b);
-    static U64 soWeOne(U64 b);
 
 };

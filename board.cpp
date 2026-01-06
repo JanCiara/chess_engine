@@ -9,27 +9,6 @@ Board::Board() {
     update_occupancies();
 }
 
-
-U64 Board::noNoEa(const U64 b) { return (b & notHFile) << 17; }
-U64 Board::noEaEa(const U64 b) { return (b & notGHFile) << 10; }
-U64 Board::soEaEa(const U64 b) { return (b & notGHFile) >> 6; }
-U64 Board::soSoEa(const U64 b) { return (b & notHFile) >> 15; }
-
-U64 Board::noNoWe(const U64 b) { return (b & notAFile) << 15; }
-U64 Board::noWeWe(const U64 b) { return (b & notABFile) << 6; }
-U64 Board::soWeWe(const U64 b) { return (b & notABFile) >> 10; }
-U64 Board::soSoWe(const U64 b) { return (b & notAFile) >> 17; }
-
-U64 Board::noOne(const U64 b) { return b << 8; }
-U64 Board::eaOne(const U64 b) { return (b & notHFile) << 1; }
-U64 Board::weOne(const U64 b) { return (b & notAFile) >> 1; }
-U64 Board::soOne(const U64 b) { return b >> 8; }
-U64 Board::noEaOne(const U64 b) { return (b & notHFile) << 9; }
-U64 Board::noWeOne(const U64 b) { return (b & notAFile) << 7; }
-U64 Board::soWeOne(const U64 b) { return (b & notAFile) >> 9; }
-U64 Board::soEaOne(const U64 b) { return (b & notHFile) >> 7; }
-
-
 int Board::sq_to_int(const std::string &square) {
     const int file = square[0] - 'a'; // 'e' - 'a' = 4
     const int rank = square[1] - '1'; // '4' - '1' = 3
@@ -79,33 +58,6 @@ void Board::init_start_position() {
     set_bit(bitboards[b], f8);
     set_bit(bitboards[q], d8);
     set_bit(bitboards[k], e8);
-
-    // Knight moves
-    for (int sq = 0; sq < 64; sq++) {
-        const U64 bb = 1ULL << sq;
-
-        KnightAttacks[sq] = noNoEa(bb) | noEaEa(bb) |
-                            soEaEa(bb) | soSoEa(bb) |
-                            noNoWe(bb) | noWeWe(bb) |
-                            soWeWe(bb) | soSoWe(bb);
-    }
-
-    // King moves
-    for (int sq = 0; sq < 64; sq++) {
-        const U64 bb = 1ULL << sq;
-
-        KingAttacks[sq] = noOne(bb) | eaOne(bb) | weOne(bb) | soOne(bb) |
-                          noEaOne(bb) | noWeOne(bb) |
-                          soEaOne(bb) | soWeOne(bb);
-    }
-
-    // Pawn Attacks
-    for (int sq = 0; sq < 64; sq++) {
-        const U64 bb = 1ULL < sq;
-
-        BlackPawnAttacks[sq] = soEaOne(bb) | soWeOne(bb);
-        WhitePawnAttacks[sq] = noEaOne(bb) | noWeOne(bb);
-    }
 }
 
 void Board::update_occupancies() {
@@ -125,13 +77,22 @@ void Board::update_occupancies() {
 void Board::print_bitboard(const U64 bb) {
     std::cout << '\n';
     for (int rank = 7; rank >= 0; rank--) {
+        // Wypisz numer rzędu
+        std::cout << " " << rank + 1 << "  ";
+
         for (int file = 0; file < 8; file++) {
-            int square = (rank * 8) + file;
-            if (get_bit(bb, square)) std::cout << " 1 ";
-            else std::cout << " . ";
+            int square = (rank * 8) + file; // Indeks pola (0..63)
+
+            if (get_bit(bb, square))
+                std::cout << " 1 ";
+            else
+                std::cout << " . ";
         }
         std::cout << '\n';
     }
+
+    // Wypisz litery kolumn
+    std::cout << "\n     a  b  c  d  e  f  g  h\n";
     std::cout << "\n   Bitboard Value: " << bb << "\n\n";
 }
 
