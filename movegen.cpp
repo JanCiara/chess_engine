@@ -346,5 +346,151 @@ U64 get_queen_attacks(int square, U64 occupancy) {
     return get_bishop_attacks(square, occupancy) | get_rook_attacks(square, occupancy);
 }
 
+static void add_move(Moves *move_list, int move) {
+    move_list->moves[move_list->count] = move;
+    move_list->count++;
+}
+
 void generate_moves(const Board *board, Moves *move_list) {
+    move_list->count = 0;
+
+    int source_square, target_square;
+    int side = board->side;
+
+    U64 bitboard, attacks;
+    // Occupancies: [0]-White, [1]-Black, [2]-Both
+    U64 occupancy = board->occupancies[2];
+    U64 enemy_occupancy = (side == WHITE) ? board->occupancies[BLACK] : board->occupancies[WHITE];
+
+    if (side == WHITE) {
+        // 1. WHITE PAWNS (P)
+        bitboard = board->bitboards[P];
+
+        while (bitboard) {
+            source_square = get_LSB(bitboard);
+
+            target_square = source_square + 8;
+
+            if (!(target_square > h8) && !get_bit(occupancy, target_square)) {
+                // Check for promotion
+                if (source_square >= a7 && source_square <= h7) {
+                    add_move(move_list, encode_move(source_square, target_square, P, Q, 0, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, P, R, 0, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, P, B, 0, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, P, N, 0, 0, 0, 0));
+                } else {
+                    // Normal move
+                    add_move(move_list, encode_move(source_square, target_square, P, 0, 0, 0, 0, 0));
+
+                    // Double push
+                    if ((source_square >= a2 && source_square <= h2) && !get_bit(occupancy, source_square + 16)) {
+                        add_move(move_list, encode_move(source_square, source_square + 16, P, 0, 0, 1, 0, 0));
+                    }
+                }
+            }
+
+            // Pawn captures
+
+            // Left capture
+            if (source_square % 8 != 0) {
+                target_square = source_square + 7;
+
+                if (get_bit(enemy_occupancy, target_square) || (target_square == board->en_passant)) {
+                    int en_passant_flag = (target_square == board->en_passant) ? 1 : 0;
+
+                    // Promotion
+                    if (source_square >= a7 && source_square <= h7) {
+                        add_move(move_list, encode_move(source_square, target_square, P, Q, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, P, R, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, P, B, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, P, N, 1, 0, 0, 0));
+                    } else {
+                        add_move(move_list, encode_move(source_square, target_square, P, 0, 1, 0, en_passant_flag, 0));
+                    }
+                }
+            }
+
+            // Right capture
+            if (source_square % 8 != 7) {
+                target_square = source_square + 9;
+
+                if (get_bit(enemy_occupancy, target_square) || (target_square == board->en_passant)) {
+                    int en_passant_flag = (target_square == board->en_passant) ? 1 : 0;
+
+                    if (source_square >= a7 && source_square <= h7) {
+                        add_move(move_list, encode_move(source_square, target_square, P, Q, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, P, R, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, P, B, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, P, N, 1, 0, 0, 0));
+                    } else {
+                        add_move(move_list, encode_move(source_square, target_square, P, 0, 1, 0, en_passant_flag, 0));
+                    }
+                }
+            }
+
+            pop_bit(bitboard, source_square);
+        }
+    } else {
+        // --- RUCHY CZARNYCH ---
+        // [p]
+        bitboard = board->bitboards[p];
+
+        while (bitboard) {
+            source_square = get_LSB(bitboard);
+            target_square = source_square - 8;
+
+            if (!(target_square < a1) && !get_bit(occupancy, target_square)) {
+                if (source_square >= a2 && source_square <= h2) {
+                    add_move(move_list, encode_move(source_square, target_square, p, q, 0, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, p, r, 0, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, p, b, 0, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, p, n, 0, 0, 0, 0));
+                } else {
+                    add_move(move_list, encode_move(source_square, target_square, p, 0, 0, 0, 0, 0));
+
+                    if ((source_square >= a7 && source_square <= h7) && !get_bit(occupancy, source_square - 16)) {
+                        add_move(move_list, encode_move(source_square, source_square - 16, p, 0, 0, 1, 0, 0));
+                    }
+                }
+            }
+
+            // --- CAPTURES ---
+
+            if (source_square % 8 != 0) {
+                target_square = source_square - 9;
+
+                if (get_bit(enemy_occupancy, target_square) || (target_square == board->en_passant)) {
+                    int en_passant_flag = (target_square == board->en_passant) ? 1 : 0;
+
+                    if (source_square >= a2 && source_square <= h2) {
+                        add_move(move_list, encode_move(source_square, target_square, p, q, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, p, r, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, p, b, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, p, n, 1, 0, 0, 0));
+                    } else {
+                        add_move(move_list, encode_move(source_square, target_square, p, 0, 1, 0, en_passant_flag, 0));
+                    }
+                }
+            }
+
+            if (source_square % 8 != 7) {
+                target_square = source_square - 7;
+
+                if (get_bit(enemy_occupancy, target_square) || (target_square == board->en_passant)) {
+                    int en_passant_flag = (target_square == board->en_passant) ? 1 : 0;
+
+                    if (source_square >= a2 && source_square <= h2) {
+                        add_move(move_list, encode_move(source_square, target_square, p, q, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, p, r, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, p, b, 1, 0, 0, 0));
+                        add_move(move_list, encode_move(source_square, target_square, p, n, 1, 0, 0, 0));
+                    } else {
+                        add_move(move_list, encode_move(source_square, target_square, p, 0, 1, 0, en_passant_flag, 0));
+                    }
+                }
+            }
+
+            pop_bit(bitboard, source_square);
+        }
+    }
 }

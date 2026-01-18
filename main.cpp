@@ -7,7 +7,7 @@ int main() {
 
     Board chess;
     // Ustawiamy piona na E2 i piona na A7 (blisko promocji)
-    chess.parseFEN("8/P7/8/8/8/8/4P3/8 w - - 0 1");
+    chess.parseFEN("8/p7/8/8/8/8/4p3/8 b - - 0 1");
     chess.print_board();
 
     Moves move_list[1];
