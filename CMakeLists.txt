@@ -10,4 +10,6 @@ add_executable(chess_engine main.cpp
         movegen.h
         movegen.cpp
         evaluate.h
-        evaluate.cpp)
+        evaluate.cpp
+        search.h
+        search.cpp)
