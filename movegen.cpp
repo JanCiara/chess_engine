@@ -358,28 +358,28 @@ void generate_moves(const Board *board, Moves *move_list) {
     int side = board->side;
 
     U64 bitboard, attacks;
-    // Occupancies: [0]-White, [1]-Black, [2]-Both
     U64 occupancy = board->occupancies[2];
     U64 enemy_occupancy = (side == WHITE) ? board->occupancies[BLACK] : board->occupancies[WHITE];
 
     if (side == WHITE) {
-        // 1. WHITE PAWNS (P)
+        // --- WHITE PAWNS ---
         bitboard = board->bitboards[P];
 
         while (bitboard) {
             source_square = get_LSB(bitboard);
 
+            // Quiet moves
             target_square = source_square + 8;
 
             if (!(target_square > h8) && !get_bit(occupancy, target_square)) {
-                // Check for promotion
+                // Promotion
                 if (source_square >= a7 && source_square <= h7) {
                     add_move(move_list, encode_move(source_square, target_square, P, Q, 0, 0, 0, 0));
                     add_move(move_list, encode_move(source_square, target_square, P, R, 0, 0, 0, 0));
                     add_move(move_list, encode_move(source_square, target_square, P, B, 0, 0, 0, 0));
                     add_move(move_list, encode_move(source_square, target_square, P, N, 0, 0, 0, 0));
                 } else {
-                    // Normal move
+                    // Single push
                     add_move(move_list, encode_move(source_square, target_square, P, 0, 0, 0, 0, 0));
 
                     // Double push
@@ -389,105 +389,76 @@ void generate_moves(const Board *board, Moves *move_list) {
                 }
             }
 
-            // Pawn captures
+            // Captures
+            attacks = pawn_attacks[WHITE][source_square];
+            U64 en_passant_bit = (board->en_passant != -1) ? (1ULL << board->en_passant) : 0ULL;
+            U64 valid_captures = attacks & (enemy_occupancy | en_passant_bit);
 
-            // Left capture
-            if (source_square % 8 != 0) {
-                target_square = source_square + 7;
+            while (valid_captures) {
+                target_square = get_LSB(valid_captures);
+                int en_passant_flag = (target_square == board->en_passant) ? 1 : 0;
 
-                if (get_bit(enemy_occupancy, target_square) || (target_square == board->en_passant)) {
-                    int en_passant_flag = (target_square == board->en_passant) ? 1 : 0;
-
-                    // Promotion
-                    if (source_square >= a7 && source_square <= h7) {
-                        add_move(move_list, encode_move(source_square, target_square, P, Q, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, P, R, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, P, B, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, P, N, 1, 0, 0, 0));
-                    } else {
-                        add_move(move_list, encode_move(source_square, target_square, P, 0, 1, 0, en_passant_flag, 0));
-                    }
+                // Capture promotion
+                if (source_square >= a7 && source_square <= h7) {
+                    add_move(move_list, encode_move(source_square, target_square, P, Q, 1, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, P, R, 1, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, P, B, 1, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, P, N, 1, 0, 0, 0));
+                } else {
+                    add_move(move_list, encode_move(source_square, target_square, P, 0, 1, 0, en_passant_flag, 0));
                 }
-            }
-
-            // Right capture
-            if (source_square % 8 != 7) {
-                target_square = source_square + 9;
-
-                if (get_bit(enemy_occupancy, target_square) || (target_square == board->en_passant)) {
-                    int en_passant_flag = (target_square == board->en_passant) ? 1 : 0;
-
-                    if (source_square >= a7 && source_square <= h7) {
-                        add_move(move_list, encode_move(source_square, target_square, P, Q, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, P, R, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, P, B, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, P, N, 1, 0, 0, 0));
-                    } else {
-                        add_move(move_list, encode_move(source_square, target_square, P, 0, 1, 0, en_passant_flag, 0));
-                    }
-                }
+                pop_bit(valid_captures, target_square);
             }
 
             pop_bit(bitboard, source_square);
         }
     } else {
-        // --- RUCHY CZARNYCH ---
-        // [p]
+        // --- BLACK PAWNS ---
         bitboard = board->bitboards[p];
 
         while (bitboard) {
             source_square = get_LSB(bitboard);
+
+            // Quiet moves
             target_square = source_square - 8;
 
             if (!(target_square < a1) && !get_bit(occupancy, target_square)) {
+                // Promotion
                 if (source_square >= a2 && source_square <= h2) {
                     add_move(move_list, encode_move(source_square, target_square, p, q, 0, 0, 0, 0));
                     add_move(move_list, encode_move(source_square, target_square, p, r, 0, 0, 0, 0));
                     add_move(move_list, encode_move(source_square, target_square, p, b, 0, 0, 0, 0));
                     add_move(move_list, encode_move(source_square, target_square, p, n, 0, 0, 0, 0));
                 } else {
+                    // Single push
                     add_move(move_list, encode_move(source_square, target_square, p, 0, 0, 0, 0, 0));
 
+                    // Double push
                     if ((source_square >= a7 && source_square <= h7) && !get_bit(occupancy, source_square - 16)) {
                         add_move(move_list, encode_move(source_square, source_square - 16, p, 0, 0, 1, 0, 0));
                     }
                 }
             }
 
-            // --- CAPTURES ---
+            // Captures
+            attacks = pawn_attacks[BLACK][source_square];
+            U64 en_passant_bit = (board->en_passant != -1) ? (1ULL << board->en_passant) : 0ULL;
+            U64 valid_captures = attacks & (enemy_occupancy | en_passant_bit);
 
-            if (source_square % 8 != 0) {
-                target_square = source_square - 9;
+            while (valid_captures) {
+                target_square = get_LSB(valid_captures);
+                int en_passant_flag = (target_square == board->en_passant) ? 1 : 0;
 
-                if (get_bit(enemy_occupancy, target_square) || (target_square == board->en_passant)) {
-                    int en_passant_flag = (target_square == board->en_passant) ? 1 : 0;
-
-                    if (source_square >= a2 && source_square <= h2) {
-                        add_move(move_list, encode_move(source_square, target_square, p, q, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, p, r, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, p, b, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, p, n, 1, 0, 0, 0));
-                    } else {
-                        add_move(move_list, encode_move(source_square, target_square, p, 0, 1, 0, en_passant_flag, 0));
-                    }
+                // Capture promotion
+                if (source_square >= a2 && source_square <= h2) {
+                    add_move(move_list, encode_move(source_square, target_square, p, q, 1, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, p, r, 1, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, p, b, 1, 0, 0, 0));
+                    add_move(move_list, encode_move(source_square, target_square, p, n, 1, 0, 0, 0));
+                } else {
+                    add_move(move_list, encode_move(source_square, target_square, p, 0, 1, 0, en_passant_flag, 0));
                 }
-            }
-
-            if (source_square % 8 != 7) {
-                target_square = source_square - 7;
-
-                if (get_bit(enemy_occupancy, target_square) || (target_square == board->en_passant)) {
-                    int en_passant_flag = (target_square == board->en_passant) ? 1 : 0;
-
-                    if (source_square >= a2 && source_square <= h2) {
-                        add_move(move_list, encode_move(source_square, target_square, p, q, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, p, r, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, p, b, 1, 0, 0, 0));
-                        add_move(move_list, encode_move(source_square, target_square, p, n, 1, 0, 0, 0));
-                    } else {
-                        add_move(move_list, encode_move(source_square, target_square, p, 0, 1, 0, en_passant_flag, 0));
-                    }
-                }
+                pop_bit(valid_captures, target_square);
             }
 
             pop_bit(bitboard, source_square);
