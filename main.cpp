@@ -6,25 +6,14 @@ int main() {
     init_all_attacks();
 
     Board chess;
-    // Ustawiamy piona na E2 i piona na A7 (blisko promocji)
-    chess.parseFEN("8/p7/8/8/8/8/4p3/8 b - - 0 1");
+
+    // Position 2 (Kiwipete) - good for testing captures/checks
+    chess.parseFEN("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
     chess.print_board();
 
-    Moves move_list[1];
-    generate_moves(&chess, move_list);
-
-    std::cout << "Znaleziono ruchow: " << move_list->count << "\n";
-
-    // Wypisz szczegóły ruchów (dekodowanie)
-    for (int i = 0; i < move_list->count; i++) {
-        int move = move_list->moves[i];
-        std::cout << "Ruch: "
-                  << Board::int_to_sq(get_move_source(move))
-                  << Board::int_to_sq(get_move_target(move))
-                  << " Promocja? " << (get_move_promoted(move) ? "TAK" : "NIE")
-                  << " Double? " << (get_move_double(move) ? "TAK" : "NIE")
-                  << "\n";
-    }
+    // Run Perft to depth 3 (should be fast)
+    // Depth 4 will take a few seconds
+    perft_test(3, &chess);
 
     return 0;
 }

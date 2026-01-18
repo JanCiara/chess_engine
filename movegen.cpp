@@ -1,5 +1,20 @@
 #include "movegen.h"
 
+#include <ctime>
+#include <iostream>
+
+
+const int castling_rights[64] = {
+    13, 15, 15, 15, 12, 15, 15, 14,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+     7, 15, 15, 15,  3, 15, 15, 11
+};
+
 U64 bishop_attacks[64][512];
 U64 rook_attacks[64][4096];
 
@@ -575,4 +590,209 @@ void generate_moves(const Board *board, Moves *move_list) {
             pop_bit(bitboard, source_square);
         }
     }
+}
+// Returns 1 if move is legal, 0 if illegal (king left in check)
+int make_move(Board *board, int move, int capture_only) {
+    // 1. ALL MOVES vs CAPTURES ONLY
+    if (capture_only) {
+        // If we only want captures, return 0 for quiet moves
+        if (!get_move_capture(move)) return 0;
+    }
+
+    // 2. BACKUP BOARD STATE
+    // We copy the whole structure. If the move turns out to be illegal (check), we restore it.
+    Board board_copy = *board;
+
+    // 3. PARSE MOVE INFO
+    int source_square = get_move_source(move);
+    int target_square = get_move_target(move);
+    int piece = get_move_piece(move);
+    int promoted_piece = get_move_promoted(move);
+    int capture = get_move_capture(move);
+    int double_push = get_move_double(move);
+    int enpassant = get_move_enpassant(move);
+    int castling = get_move_castling(move);
+
+    // 4. MOVE THE PIECE
+    // Remove from source, put on target
+    pop_bit(board->bitboards[piece], source_square);
+    set_bit(board->bitboards[piece], target_square);
+
+    // 5. HANDLE CAPTURES
+    if (capture) {
+        // Identify which opponent piece was on target_square and remove it
+        // Range: If white moves (0..5), opponent is black (6..11) and vice versa
+        int start_piece, end_piece;
+
+        if (board->side == WHITE) {
+            start_piece = p; end_piece = k;
+        } else {
+            start_piece = P; end_piece = K;
+        }
+
+        for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++) {
+            if (get_bit(board->bitboards[bb_piece], target_square)) {
+                pop_bit(board->bitboards[bb_piece], target_square);
+                break; // Found and removed the victim
+            }
+        }
+    }
+
+    // 6. HANDLE PROMOTION
+    if (promoted_piece) {
+        // Remove the pawn from target (we just put it there)
+        pop_bit(board->bitboards[(board->side == WHITE) ? P : p], target_square);
+        // Add the new shiny piece
+        set_bit(board->bitboards[promoted_piece], target_square);
+    }
+
+    // 7. HANDLE EN PASSANT
+    if (enpassant) {
+        // Capture is not on target square, but behind it!
+        // White captures up (-8 index for victim logic? No, geometry depends on implementation)
+        // If White moves to e6 (en passant), victim was on e5.
+        // Board logic: White goes +8 (up). So victim is 'target - 8'.
+        // Black goes -8 (down). So victim is 'target + 8'.
+
+        if (board->side == WHITE) {
+            pop_bit(board->bitboards[p], target_square - 8);
+        } else {
+            pop_bit(board->bitboards[P], target_square + 8);
+        }
+    }
+
+    // 8. RESET EN PASSANT SQUARE
+    // En passant is only available for ONE turn. Reset it now.
+    board->en_passant = -1;
+
+    // 9. HANDLE DOUBLE PUSH (Set new en passant square)
+    if (double_push) {
+        // If White moves e2-e4, en passant square becomes e3 (source + 8)
+        if (board->side == WHITE) {
+            board->en_passant = source_square + 8;
+        } else {
+            board->en_passant = source_square - 8;
+        }
+    }
+
+    // 10. HANDLE CASTLING
+    if (castling) {
+        switch (target_square) {
+            // White Short (g1) -> Move Rook h1-f1
+            case g1:
+                pop_bit(board->bitboards[R], h1);
+                set_bit(board->bitboards[R], f1);
+                break;
+            // White Long (c1) -> Move Rook a1-d1
+            case c1:
+                pop_bit(board->bitboards[R], a1);
+                set_bit(board->bitboards[R], d1);
+                break;
+            // Black Short (g8) -> Move Rook h8-f8
+            case g8:
+                pop_bit(board->bitboards[r], h8);
+                set_bit(board->bitboards[r], f8);
+                break;
+            // Black Long (c8) -> Move Rook a8-d8
+            case c8:
+                pop_bit(board->bitboards[r], a8);
+                set_bit(board->bitboards[r], d8);
+                break;
+        }
+    }
+
+    // 11. UPDATE CASTLING RIGHTS
+    // Bitwise AND with pre-calculated table.
+    // E.g. moving King from e1 (12) clears bits 1 and 2 (WK, WQ).
+    board->castle &= castling_rights[source_square];
+    board->castle &= castling_rights[target_square];
+
+    // 12. UPDATE OCCUPANCIES
+    board->update_occupancies();
+
+    // 13. CHANGE SIDE
+    board->side ^= 1;
+
+    // 14. LEGALITY CHECK (The most important part!)
+    // If the King of the side that just moved is attacked -> ILLEGAL
+    // Note: We already swapped sides. So if White moved, 'side' is now Black.
+    // We need to check if WHITE King is attacked by BLACK.
+
+    // Side that just moved:
+    int side_moved = board->side ^ 1;
+    // King of the side that moved:
+    int king_bitboard_index = (side_moved == WHITE) ? K : k;
+    int king_square = get_LSB(board->bitboards[king_bitboard_index]);
+
+    if (is_square_attacked(king_square, board->side, board)) {
+        // Restore board and return illegal
+        *board = board_copy;
+        return 0;
+    }
+
+    // Move successful
+    return 1;
+}
+
+// Main recursive driver
+long long perft_driver(int depth, Board *board) {
+    // Base case: leaf node reached
+    if (depth == 0) return 1;
+
+    Moves move_list[1];
+    generate_moves(board, move_list);
+
+    long long nodes = 0;
+
+    for (int i = 0; i < move_list->count; i++) {
+        // Backup board state (since we don't have undo_move yet)
+        Board copy = *board;
+
+        // Try to make move
+        if (!make_move(board, move_list->moves[i], 0)) {
+            // Illegal move - skip (board is already restored by make_move)
+            continue;
+        }
+
+        // Recursive call
+        nodes += perft_driver(depth - 1, board);
+
+        // Restore board state (undo)
+        *board = copy;
+    }
+
+    return nodes;
+}
+
+// Perft test runner
+void perft_test(int depth, Board *board) {
+    std::cout << "\n   --- PERFT TEST (Depth: " << depth << ") ---\n";
+
+    Moves move_list[1];
+    generate_moves(board, move_list);
+
+    long long start = clock();
+    long long nodes = 0;
+
+    for (int i = 0; i < move_list->count; i++) {
+        Board copy = *board;
+
+        if (!make_move(board, move_list->moves[i], 0)) continue;
+
+        long long cumulative_nodes = perft_driver(depth - 1, board);
+        nodes += cumulative_nodes;
+
+        // Restore board
+        *board = copy;
+
+        // Print moves count for root moves (helps debugging)
+        std::cout << "   " << Board::int_to_sq(get_move_source(move_list->moves[i]))
+                  << Board::int_to_sq(get_move_target(move_list->moves[i]))
+                  << ": " << cumulative_nodes << "\n";
+    }
+
+    long long end = clock();
+    std::cout << "\n   Nodes visited: " << nodes << "\n";
+    std::cout << "   Time: " << (end - start) << " ms\n";
+    std::cout << "   Speed: " << ((nodes * 1000) / (end - start + 1)) << " nodes/s\n";
 }
