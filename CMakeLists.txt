@@ -8,4 +8,6 @@ add_executable(chess_engine main.cpp
         board.h
         board.cpp
         movegen.h
-        movegen.cpp)
+        movegen.cpp
+        evaluate.h
+        evaluate.cpp)

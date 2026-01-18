@@ -640,20 +640,12 @@ int make_move(Board *board, int move, int capture_only) {
 
     // 6. HANDLE PROMOTION
     if (promoted_piece) {
-        // Remove the pawn from target (we just put it there)
         pop_bit(board->bitboards[(board->side == WHITE) ? P : p], target_square);
-        // Add the new shiny piece
         set_bit(board->bitboards[promoted_piece], target_square);
     }
 
     // 7. HANDLE EN PASSANT
     if (enpassant) {
-        // Capture is not on target square, but behind it!
-        // White captures up (-8 index for victim logic? No, geometry depends on implementation)
-        // If White moves to e6 (en passant), victim was on e5.
-        // Board logic: White goes +8 (up). So victim is 'target - 8'.
-        // Black goes -8 (down). So victim is 'target + 8'.
-
         if (board->side == WHITE) {
             pop_bit(board->bitboards[p], target_square - 8);
         } else {
@@ -662,12 +654,10 @@ int make_move(Board *board, int move, int capture_only) {
     }
 
     // 8. RESET EN PASSANT SQUARE
-    // En passant is only available for ONE turn. Reset it now.
     board->en_passant = -1;
 
     // 9. HANDLE DOUBLE PUSH (Set new en passant square)
     if (double_push) {
-        // If White moves e2-e4, en passant square becomes e3 (source + 8)
         if (board->side == WHITE) {
             board->en_passant = source_square + 8;
         } else {
@@ -702,8 +692,6 @@ int make_move(Board *board, int move, int capture_only) {
     }
 
     // 11. UPDATE CASTLING RIGHTS
-    // Bitwise AND with pre-calculated table.
-    // E.g. moving King from e1 (12) clears bits 1 and 2 (WK, WQ).
     board->castle &= castling_rights[source_square];
     board->castle &= castling_rights[target_square];
 
@@ -714,29 +702,21 @@ int make_move(Board *board, int move, int capture_only) {
     board->side ^= 1;
 
     // 14. LEGALITY CHECK (The most important part!)
-    // If the King of the side that just moved is attacked -> ILLEGAL
-    // Note: We already swapped sides. So if White moved, 'side' is now Black.
-    // We need to check if WHITE King is attacked by BLACK.
 
-    // Side that just moved:
     int side_moved = board->side ^ 1;
-    // King of the side that moved:
+
     int king_bitboard_index = (side_moved == WHITE) ? K : k;
     int king_square = get_LSB(board->bitboards[king_bitboard_index]);
 
     if (is_square_attacked(king_square, board->side, board)) {
-        // Restore board and return illegal
         *board = board_copy;
         return 0;
     }
 
-    // Move successful
     return 1;
 }
 
-// Main recursive driver
 long long perft_driver(int depth, Board *board) {
-    // Base case: leaf node reached
     if (depth == 0) return 1;
 
     Moves move_list[1];
@@ -745,7 +725,6 @@ long long perft_driver(int depth, Board *board) {
     long long nodes = 0;
 
     for (int i = 0; i < move_list->count; i++) {
-        // Backup board state (since we don't have undo_move yet)
         Board copy = *board;
 
         // Try to make move
@@ -764,7 +743,6 @@ long long perft_driver(int depth, Board *board) {
     return nodes;
 }
 
-// Perft test runner
 void perft_test(int depth, Board *board) {
     std::cout << "\n   --- PERFT TEST (Depth: " << depth << ") ---\n";
 
@@ -782,10 +760,8 @@ void perft_test(int depth, Board *board) {
         long long cumulative_nodes = perft_driver(depth - 1, board);
         nodes += cumulative_nodes;
 
-        // Restore board
         *board = copy;
 
-        // Print moves count for root moves (helps debugging)
         std::cout << "   " << Board::int_to_sq(get_move_source(move_list->moves[i]))
                   << Board::int_to_sq(get_move_target(move_list->moves[i]))
                   << ": " << cumulative_nodes << "\n";

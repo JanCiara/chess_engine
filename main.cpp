@@ -1,19 +1,17 @@
 #include <iostream>
 #include "board.h"
 #include "movegen.h"
+#include "evaluate.h" // <--- Include
 
 int main() {
     init_all_attacks();
-
     Board chess;
 
-    // Position 2 (Kiwipete) - good for testing captures/checks
-    chess.parseFEN("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
-    chess.print_board();
+    chess.parseFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    std::cout << "Start Position Evaluation: " << evaluate(&chess) << "\n";
 
-    // Run Perft to depth 3 (should be fast)
-    // Depth 4 will take a few seconds
-    perft_test(3, &chess);
+    chess.parseFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNB1KBNR w KQkq - 0 1");
+    std::cout << "No Queen Evaluation: " << evaluate(&chess) << "\n";
 
     return 0;
 }
