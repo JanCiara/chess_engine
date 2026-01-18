@@ -16,3 +16,5 @@ U64 get_rook_attacks(int square, U64 occupancy);
 U64 get_queen_attacks(int square, U64 occupancy);
 
 void generate_moves(const Board* board, Moves* move_list);
+
+int is_square_attacked(int square, int side, const Board* board);

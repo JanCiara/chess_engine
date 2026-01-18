@@ -465,3 +465,29 @@ void generate_moves(const Board *board, Moves *move_list) {
         }
     }
 }
+int is_square_attacked(int square, int side, const Board* board) {
+    // Pawns
+    if ((side == WHITE) && (pawn_attacks[BLACK][square] & board->bitboards[P])) return 1;
+    if ((side == BLACK) && (pawn_attacks[WHITE][square] & board->bitboards[p])) return 1;
+
+    // Knights
+    if (knight_attacks[square] & ((side == WHITE) ? board->bitboards[N] : board->bitboards[n])) return 1;
+
+    // King
+    if (king_attacks[square] & ((side == WHITE) ? board->bitboards[K] : board->bitboards[k])) return 1;
+
+    //
+    U64 bishop_targets = get_bishop_attacks(square, board->occupancies[2]);
+    U64 diagonal_attackers = (side == WHITE) ? (board->bitboards[B] | board->bitboards[Q])
+                                             : (board->bitboards[b] | board->bitboards[q]);
+
+    if (bishop_targets & diagonal_attackers) return 1;
+
+    U64 rook_targets = get_rook_attacks(square, board->occupancies[2]);
+    U64 straight_attackers = (side == WHITE) ? (board->bitboards[R] | board->bitboards[Q])
+                                             : (board->bitboards[r] | board->bitboards[q]);
+
+    if (rook_targets & straight_attackers) return 1;
+
+    return 0;
+}
