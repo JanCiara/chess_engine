@@ -729,7 +729,6 @@ long long perft_driver(int depth, Board *board) {
 
         // Try to make move
         if (!make_move(board, move_list->moves[i], 0)) {
-            // Illegal move - skip (board is already restored by make_move)
             continue;
         }
 

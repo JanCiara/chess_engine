@@ -10,10 +10,6 @@ int parse_move(Board* board, std::string move_string) {
     Moves move_list[1];
     generate_moves(board, move_list);
 
-    // FIX: Parse coordinates for Little-Endian Bitboards (A1 = 0)
-    // File: 'a' -> 0, 'h' -> 7
-    // Rank: '1' -> 0, '8' -> 7 (multiply by 8 for row)
-
     int source = (move_string[0] - 'a') + ((move_string[1] - '1') * 8);
     int target = (move_string[2] - 'a') + ((move_string[3] - '1') * 8);
 
@@ -39,11 +35,6 @@ int parse_move(Board* board, std::string move_string) {
     return 0;
 }
 
-// Parse "position" command
-// Examples:
-// "position startpos"
-// "position startpos moves e2e4 e7e5"
-// "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 moves e2e4"
 void parse_position(Board* board, std::string command) {
     std::stringstream ss(command);
     std::string token;

@@ -74,7 +74,7 @@ constexpr U64 notHFile  = 0x7F7F7F7F7F7F7F7FULL;
 constexpr U64 notGHFile = 0x3F3F3F3F3F3F3F3FULL;
 
 /*
-    Kodowanie ruchu w 32-bitowym int:
+    Move encoding in 32-bit int:
     0000 0000 0000 0000 0011 1111   Source Square (0-63)
     0000 0000 0000 1111 1100 0000   Target Square (0-63)
     0000 0000 1111 0000 0000 0000   Piece (co ruszamy)
@@ -95,7 +95,6 @@ constexpr U64 notGHFile = 0x3F3F3F3F3F3F3F3FULL;
 ((enpassant) << 22) | \
 ((castling) << 23))
 
-// Makra do odczytu
 #define get_move_source(move)      ((move) & 0x3f)
 #define get_move_target(move)      (((move) >> 6) & 0x3f)
 #define get_move_piece(move)       (((move) >> 12) & 0xf)
@@ -105,7 +104,6 @@ constexpr U64 notGHFile = 0x3F3F3F3F3F3F3F3FULL;
 #define get_move_enpassant(move)   ((move) & (1 << 22))
 #define get_move_castling(move)    ((move) & (1 << 23))
 
-// Struktura listy ruchów
 struct Moves {
     int moves[256];
     int count = 0;
