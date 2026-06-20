@@ -58,7 +58,28 @@ add_executable(eval_test tests/eval_test.cpp ${ENGINE_CORE_SOURCES})
 target_include_directories(eval_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(eval_test PRIVATE ${ENGINE_RELEASE_FLAGS} ${ENGINE_DEBUG_FLAGS})
 
+include(FetchContent)
+FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+add_executable(unit_test
+    tests/unit_test.cpp
+    board.cpp
+    epd.cpp
+    tt.cpp
+    draw.cpp
+)
+target_include_directories(unit_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(unit_test PRIVATE GTest::gtest_main)
+target_compile_options(unit_test PRIVATE ${ENGINE_DEBUG_FLAGS})
+
 enable_testing()
+add_test(NAME unit COMMAND unit_test)
 add_test(NAME perft COMMAND perft_test)
 add_test(NAME bench COMMAND bench_test)
 add_test(NAME wac COMMAND wac_test)

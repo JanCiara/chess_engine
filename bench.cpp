@@ -63,6 +63,7 @@ static constexpr int BENCH_POSITION_COUNT =
 
 BenchResult run_bench(int depth, bool quiet) {
     Board board;
+    Search search;
     BenchResult result;
     result.depth = depth;
     result.positions = BENCH_POSITION_COUNT;
@@ -73,15 +74,15 @@ BenchResult run_bench(int depth, bool quiet) {
 
     for (int i = 0; i < BENCH_POSITION_COUNT; i++) {
         board.parseFEN(BENCH_FENS[i]);
-        game_history_reset();
-        game_history_push(board.hash_key);
+        search.game_history_reset();
+        search.game_history_push(board.hash_key());
 
         SearchLimits limits;
         limits.depth = depth;
         limits.quiet = true;
 
-        search_position(&board, limits);
-        result.total_nodes += get_search_nodes();
+        search.search_position(&board, limits);
+        result.total_nodes += search.nodes();
 
         if (!quiet) {
             std::cout << "Position: " << (i + 1) << "/" << BENCH_POSITION_COUNT << std::endl;

@@ -45,16 +45,19 @@ Release builds use `-O2 -march=native` (GCC/Clang) or `/O2` (MSVC).
 cmake --build build
 ctest --test-dir build --output-on-failure
 # or directly:
+./build/unit_test
 ./build/perft_test
 ./build/bench_test
 ./build/wac_test
 ```
 
-| Test | What it checks |
-|------|----------------|
-| `perft_test` | Move generation node counts + perft NPS benchmark |
-| `bench_test` | Fixed-position search bench: repeatable total nodes at depth 8 |
-| `wac_test` | WAC EPD tactical suite: % of positions with correct best move (depth 10) |
+| Test | Type | What it checks |
+|------|------|----------------|
+| `unit_test` | Unit (GTest) | Isolated helpers: bitboards, move encoding, FEN/EPD parsing, Zobrist hash, draw rules, TT store/probe |
+| `perft_test` | Integration / regression | Move generation node counts + perft NPS benchmark |
+| `bench_test` | Integration / regression | Fixed-position search bench: repeatable total nodes at depth 8 |
+| `wac_test` | Integration / regression | WAC EPD tactical suite: % of positions with correct best move (depth 10) |
+| `eval_test` | Integration / regression | Evaluation score regression on fixed positions |
 
 Results are published in the [CI workflow summary](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml) on every push.
 
@@ -124,6 +127,7 @@ Nodes/second    : 905333
 | `bench.cpp` | Fixed-position search benchmark |
 | `epd.cpp` | EPD line parser (`bm`, `id`) |
 | `uci.cpp` | UCI protocol loop |
+| `tests/unit_test.cpp` | GTest unit tests (isolated functions, no full search) |
 | `tests/perft_test.cpp` | Perft regression suite and NPS benchmark |
 | `tests/bench_test.cpp` | Search bench regression (node count) |
 | `tests/wac_test.cpp` | WAC tactical EPD suite |

@@ -155,8 +155,8 @@ static int eval_pawn_structure(U64 friendly_pawns, U64 enemy_pawns, int color) {
 }
 
 static int count_mobility(const Board* board, int color) {
-    U64 occupancy = board->occupancies[2];
-    U64 not_friendly = ~board->occupancies[color];
+    U64 occupancy = board->occupancy(2);
+    U64 not_friendly = ~board->occupancy(color);
     int mob = 0;
 
     int pieces[] = {
@@ -168,7 +168,7 @@ static int count_mobility(const Board* board, int color) {
     int weights[] = {MOB_KNIGHT, MOB_BISHOP, MOB_ROOK, MOB_QUEEN};
 
     for (int i = 0; i < 4; i++) {
-        U64 bb = board->bitboards[pieces[i]];
+        U64 bb = board->bitboard(pieces[i]);
         while (bb) {
             int sq = pop_LSB(bb);
             U64 attacks;
@@ -200,7 +200,7 @@ static U64 king_zone(int king_sq, int color) {
 }
 
 static int king_safety_scale(const Board* board) {
-    int queens = count_bits(board->bitboards[Q]) + count_bits(board->bitboards[q]);
+    int queens = count_bits(board->bitboard(Q)) + count_bits(board->bitboard(q));
     if (queens == 0) return 25;
     if (queens == 1) return 75;
     return 100;
@@ -208,7 +208,7 @@ static int king_safety_scale(const Board* board) {
 
 static int eval_king_safety(const Board* board, int color, U64 friendly_pawns) {
     int king_pc = (color == WHITE) ? K : k;
-    U64 king_bb = board->bitboards[king_pc];
+    U64 king_bb = board->bitboard(king_pc);
     if (!king_bb) return 0;
 
     int king_sq = get_LSB(king_bb);
@@ -248,7 +248,7 @@ int evaluate(Board* board) {
 
     // --- WHITE PIECES ---
 
-    bitboard = board->bitboards[P];
+    bitboard = board->bitboard(P);
     while (bitboard) {
         square = get_LSB(bitboard);
         score += P_val;
@@ -256,7 +256,7 @@ int evaluate(Board* board) {
         pop_bit(bitboard, square);
     }
 
-    bitboard = board->bitboards[N];
+    bitboard = board->bitboard(N);
     while (bitboard) {
         square = get_LSB(bitboard);
         score += N_val;
@@ -264,7 +264,7 @@ int evaluate(Board* board) {
         pop_bit(bitboard, square);
     }
 
-    bitboard = board->bitboards[B];
+    bitboard = board->bitboard(B);
     while (bitboard) {
         square = get_LSB(bitboard);
         score += B_val;
@@ -272,7 +272,7 @@ int evaluate(Board* board) {
         pop_bit(bitboard, square);
     }
 
-    bitboard = board->bitboards[R];
+    bitboard = board->bitboard(R);
     while (bitboard) {
         square = get_LSB(bitboard);
         score += R_val;
@@ -280,7 +280,7 @@ int evaluate(Board* board) {
         pop_bit(bitboard, square);
     }
 
-    bitboard = board->bitboards[Q];
+    bitboard = board->bitboard(Q);
     while (bitboard) {
         square = get_LSB(bitboard);
         score += Q_val;
@@ -288,7 +288,7 @@ int evaluate(Board* board) {
         pop_bit(bitboard, square);
     }
 
-    bitboard = board->bitboards[K];
+    bitboard = board->bitboard(K);
     if (bitboard) {
         square = get_LSB(bitboard);
         score += K_val;
@@ -297,7 +297,7 @@ int evaluate(Board* board) {
 
     // --- BLACK PIECES ---
 
-    bitboard = board->bitboards[p];
+    bitboard = board->bitboard(p);
     while (bitboard) {
         square = get_LSB(bitboard);
         score -= P_val;
@@ -305,7 +305,7 @@ int evaluate(Board* board) {
         pop_bit(bitboard, square);
     }
 
-    bitboard = board->bitboards[n];
+    bitboard = board->bitboard(n);
     while (bitboard) {
         square = get_LSB(bitboard);
         score -= N_val;
@@ -313,7 +313,7 @@ int evaluate(Board* board) {
         pop_bit(bitboard, square);
     }
 
-    bitboard = board->bitboards[b];
+    bitboard = board->bitboard(b);
     while (bitboard) {
         square = get_LSB(bitboard);
         score -= B_val;
@@ -321,7 +321,7 @@ int evaluate(Board* board) {
         pop_bit(bitboard, square);
     }
 
-    bitboard = board->bitboards[r];
+    bitboard = board->bitboard(r);
     while (bitboard) {
         square = get_LSB(bitboard);
         score -= R_val;
@@ -329,7 +329,7 @@ int evaluate(Board* board) {
         pop_bit(bitboard, square);
     }
 
-    bitboard = board->bitboards[q];
+    bitboard = board->bitboard(q);
     while (bitboard) {
         square = get_LSB(bitboard);
         score -= Q_val;
@@ -337,7 +337,7 @@ int evaluate(Board* board) {
         pop_bit(bitboard, square);
     }
 
-    bitboard = board->bitboards[k];
+    bitboard = board->bitboard(k);
     if (bitboard) {
         square = get_LSB(bitboard);
         score -= K_val;
@@ -345,16 +345,16 @@ int evaluate(Board* board) {
     }
 
     // --- PAWN STRUCTURE ---
-    score += eval_pawn_structure(board->bitboards[P], board->bitboards[p], WHITE);
-    score -= eval_pawn_structure(board->bitboards[p], board->bitboards[P], BLACK);
+    score += eval_pawn_structure(board->bitboard(P), board->bitboard(p), WHITE);
+    score -= eval_pawn_structure(board->bitboard(p), board->bitboard(P), BLACK);
 
     // --- MOBILITY ---
     score += count_mobility(board, WHITE);
     score -= count_mobility(board, BLACK);
 
     // --- KING SAFETY ---
-    score += eval_king_safety(board, WHITE, board->bitboards[P]);
-    score -= eval_king_safety(board, BLACK, board->bitboards[p]);
+    score += eval_king_safety(board, WHITE, board->bitboard(P));
+    score -= eval_king_safety(board, BLACK, board->bitboard(p));
 
-    return (board->side == WHITE) ? score : -score;
+    return (board->side() == WHITE) ? score : -score;
 }

@@ -1,50 +1,42 @@
 #pragma once
+#include <bit>
 #include <cstdint>
 
-// --- TYPES ---
-typedef uint64_t U64;
+using U64 = uint64_t;
 
-// --- MACROS ---
-#define get_bit(bitboard, square) ((bitboard) & (1ULL << (square)))
-#define set_bit(bitboard, square) ((bitboard) |= (1ULL << (square)))
-#define pop_bit(bitboard, square) ((bitboard) &= ~(1ULL << (square)))
+inline bool get_bit(U64 bitboard, int square) {
+    return (bitboard & (1ULL << square)) != 0;
+}
 
-#define ROW(x) (x >> 3)
-#define COL(x) (x & 7)
+inline void set_bit(U64& bitboard, int square) {
+    bitboard |= (1ULL << square);
+}
 
-#if defined(_MSC_VER)
-// Code for Visual Studio (Windows)
-#include <intrin.h>
-#include <nmmintrin.h>
+inline void pop_bit(U64& bitboard, int square) {
+    bitboard &= ~(1ULL << square);
+}
 
-    #define count_bits(b) _mm_popcnt_u64(b)
+inline constexpr int ROW(int square) { return square >> 3; }
+inline constexpr int COL(int square) { return square & 7; }
 
-    inline int get_LSB(U64 b) {
-        unsigned long index;
-        _BitScanForward64(&index, b);
-        return (int)index;
-    }
+inline int count_bits(U64 b) {
+    return static_cast<int>(std::popcount(b));
+}
 
-    inline int get_MSB(U64 b) {
-        unsigned long index;
-        _BitScanReverse64(&index, b);
-        return (int)index;
-    }
+inline int get_LSB(U64 b) {
+    return static_cast<int>(std::countr_zero(b));
+}
 
-#else
-    // Code for GCC / Clang (Linux, Mac, MinGW)
-    #define count_bits(b) __builtin_popcountll(b)
-    #define get_LSB(b) (__builtin_ctzll(b))
-    #define get_MSB(b) (63 - __builtin_clzll(b))
-#endif
+inline int get_MSB(U64 b) {
+    return static_cast<int>(std::bit_width(b) - 1);
+}
 
-inline int pop_LSB(U64 &b) {
+inline int pop_LSB(U64& b) {
     int i = get_LSB(b);
     b &= b - 1;
     return i;
 }
 
-// --- ENUMS ---
 enum {
     a1, b1, c1, d1, e1, f1, g1, h1,
     a2, b2, c2, d2, e2, f2, g2, h2,
@@ -67,7 +59,6 @@ enum {
     BLACK_CASTLING = BK | BQ
 };
 
-// Helpers for  generating knight moves
 constexpr U64 notAFile  = 0xFEFEFEFEFEFEFEFEULL;
 constexpr U64 notABFile = 0xFCFCFCFCFCFCFCFCULL;
 constexpr U64 notHFile  = 0x7F7F7F7F7F7F7F7FULL;
@@ -85,24 +76,26 @@ constexpr U64 notGHFile = 0x3F3F3F3F3F3F3F3FULL;
     1000 0000 0000 0000 0000 0000   Castling
 */
 
-#define encode_move(source, target, piece, promoted, capture, double_push, enpassant, castling) (\
-(source) | \
-((target) << 6) | \
-((piece) << 12) | \
-((promoted) << 16) | \
-((capture) << 20) | \
-((double_push) << 21) | \
-((enpassant) << 22) | \
-((castling) << 23))
+inline int encode_move(int source, int target, int piece, int promoted,
+                       int capture, int double_push, int enpassant, int castling) {
+    return source
+         | (target << 6)
+         | (piece << 12)
+         | (promoted << 16)
+         | (capture << 20)
+         | (double_push << 21)
+         | (enpassant << 22)
+         | (castling << 23);
+}
 
-#define get_move_source(move)      ((move) & 0x3f)
-#define get_move_target(move)      (((move) >> 6) & 0x3f)
-#define get_move_piece(move)       (((move) >> 12) & 0xf)
-#define get_move_promoted(move)    (((move) >> 16) & 0xf)
-#define get_move_capture(move)     ((move) & (1 << 20))
-#define get_move_double(move)      ((move) & (1 << 21))
-#define get_move_enpassant(move)   ((move) & (1 << 22))
-#define get_move_castling(move)    ((move) & (1 << 23))
+inline int get_move_source(int move) { return move & 0x3f; }
+inline int get_move_target(int move) { return (move >> 6) & 0x3f; }
+inline int get_move_piece(int move) { return (move >> 12) & 0xf; }
+inline int get_move_promoted(int move) { return (move >> 16) & 0xf; }
+inline int get_move_capture(int move) { return move & (1 << 20); }
+inline int get_move_double(int move) { return move & (1 << 21); }
+inline int get_move_enpassant(int move) { return move & (1 << 22); }
+inline int get_move_castling(int move) { return move & (1 << 23); }
 
 struct Moves {
     int moves[256];

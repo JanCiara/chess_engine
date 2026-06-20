@@ -5,57 +5,31 @@
 #include "tt.h"
 #include "draw.h"
 
-int best_move = 0;
-
-#define INF 50000
-#define MATE_SCORE 49000
-#define MAX_GAME_HISTORY 1024
-#define MAX_SEARCH_REP 2048
-
-// Positions actually reached in the played game, used to seed repetition
-// detection at the root.
-static U64 game_history[MAX_GAME_HISTORY];
-static int game_history_len = 0;
-
-static U64 rep_stack[MAX_SEARCH_REP];
-static int rep_ply = 0;
-static int search_seldepth = 0;
-static const int piece_values[12] = {
+const int Search::piece_values[12] = {
     100, 300, 350, 500, 1000, 10000,
     100, 300, 350, 500, 1000, 10000
 };
 
-static bool stop_search = false;
-static int follow_pv_move = 0;
-static int current_tt_move = 0;
-static long long nodes = 0;
-static long long search_start_ms = 0;
-static int search_time_limit_ms = -1;
-
-static long long now_ms() {
+long long Search::now_ms() {
     using namespace std::chrono;
     return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
 }
 
-void request_stop() {
-    stop_search = true;
+void Search::request_stop() {
+    stop_search_ = true;
 }
 
-long long get_search_nodes() {
-    return nodes;
+void Search::game_history_reset() {
+    game_history_len_ = 0;
 }
 
-void game_history_reset() {
-    game_history_len = 0;
-}
-
-void game_history_push(U64 key) {
-    if (game_history_len < MAX_GAME_HISTORY) {
-        game_history[game_history_len++] = key;
+void Search::game_history_push(U64 key) {
+    if (game_history_len_ < MAX_GAME_HISTORY) {
+        game_history_[game_history_len_++] = key;
     }
 }
 
-static int allocate_time_ms(const Board* board, const SearchLimits& limits) {
+int Search::allocate_time_ms(const Board* board, const SearchLimits& limits) const {
     if (limits.infinite) {
         return -1;
     }
@@ -63,8 +37,8 @@ static int allocate_time_ms(const Board* board, const SearchLimits& limits) {
         return limits.movetime;
     }
 
-    int time = (board->side == WHITE) ? limits.wtime : limits.btime;
-    int inc = (board->side == WHITE) ? limits.winc : limits.binc;
+    int time = (board->side() == WHITE) ? limits.wtime : limits.btime;
+    int inc = (board->side() == WHITE) ? limits.winc : limits.binc;
 
     if (time <= 0) {
         return -1;
@@ -84,67 +58,54 @@ static int allocate_time_ms(const Board* board, const SearchLimits& limits) {
     return allocation;
 }
 
-static void check_time() {
-    nodes++;
-    if (search_time_limit_ms < 0) {
+void Search::check_time() {
+    nodes_++;
+    if (search_time_limit_ms_ < 0) {
         return;
     }
-    if (nodes % 2048 == 0) {
-        if (now_ms() - search_start_ms >= search_time_limit_ms) {
-            stop_search = true;
+    if (nodes_ % 2048 == 0) {
+        if (now_ms() - search_start_ms_ >= search_time_limit_ms_) {
+            stop_search_ = true;
         }
     }
 }
 
-static int in_check(const Board* board) {
-    int king_sq = get_LSB(board->bitboards[(board->side == WHITE) ? K : k]);
-    return is_square_attacked(king_sq, board->side ^ 1, board);
+int Search::in_check(const Board* board) {
+    int king_sq = get_LSB(board->bitboard((board->side() == WHITE) ? K : k));
+    return is_square_attacked(king_sq, board->side() ^ 1, board);
 }
 
-static bool has_non_pawn_material(const Board* board) {
-    if (board->side == WHITE) {
-        return board->bitboards[N] || board->bitboards[B]
-            || board->bitboards[R] || board->bitboards[Q];
+bool Search::has_non_pawn_material(const Board* board) {
+    if (board->side() == WHITE) {
+        return board->bitboard(N) || board->bitboard(B)
+            || board->bitboard(R) || board->bitboard(Q);
     }
-    return board->bitboards[n] || board->bitboards[b]
-        || board->bitboards[r] || board->bitboards[q];
+    return board->bitboard(n) || board->bitboard(b)
+        || board->bitboard(r) || board->bitboard(q);
 }
 
-static void apply_null_move(Board* board) {
-    board->side ^= 1;
-    board->en_passant = -1;
-    board->hash_key = compute_hash(board);
-}
-
-static bool is_repetition(U64 key) {
-    // rep_stack already contains the current position (pushed by the parent
-    // before recursing), so a single additional match means the position has
-    // occurred earlier in the line: treat that twofold as a draw in the tree.
-    for (int i = 0; i < rep_ply - 1; i++) {
-        if (rep_stack[i] == key) {
+bool Search::is_repetition(U64 key) const {
+    for (int i = 0; i < rep_ply_ - 1; i++) {
+        if (rep_stack_[i] == key) {
             return true;
         }
     }
     return false;
 }
 
-static int draw_score(const Board* board) {
+int Search::draw_score(const Board* board) const {
     if (is_draw(board)) {
         return 0;
     }
-    if (is_repetition(board->hash_key)) {
+    if (is_repetition(board->hash_key())) {
         return 0;
     }
     return -1;
 }
 
-static int get_victim_piece(const Board* board, int square) {
-    for (int piece = P; piece <= k; piece++) {
-        if (get_bit(board->bitboards[piece], square)) {
-            return piece;
-        }
-    }
-    return 0;
+int Search::get_victim_piece(const Board* board, int square) {
+    int piece = board->piece_at(square);
+    return piece >= 0 ? piece : 0;
 }
 
 static U64 see_attackers_to(int square, const U64 bb[12], U64 occupancy) {
@@ -154,15 +115,6 @@ static U64 see_attackers_to(int square, const U64 bb[12], U64 occupancy) {
         | (king_attacks[square] & (bb[K] | bb[k]))
         | (get_bishop_attacks(square, occupancy) & (bb[B] | bb[b] | bb[Q] | bb[q]))
         | (get_rook_attacks(square, occupancy) & (bb[R] | bb[r] | bb[Q] | bb[q]));
-}
-
-static int see_piece_on(const U64 bb[12], int square) {
-    for (int piece = P; piece <= k; piece++) {
-        if (get_bit(bb[piece], square)) {
-            return piece;
-        }
-    }
-    return 0;
 }
 
 static int see_find_attacker(int square, int side, const U64 bb[12], U64 occupancy, int* attacker_sq) {
@@ -188,7 +140,7 @@ static int see_find_attacker(int square, int side, const U64 bb[12], U64 occupan
     return 0;
 }
 
-static int see(const Board* board, int move) {
+int Search::see(const Board* board, int move) {
     if (!get_move_capture(move) && !get_move_promoted(move)) {
         return 0;
     }
@@ -201,8 +153,8 @@ static int see(const Board* board, int move) {
     int captured_sq = to;
     int captured = get_victim_piece(board, to);
     if (get_move_enpassant(move)) {
-        captured_sq = (board->side == WHITE) ? to - 8 : to + 8;
-        captured = (board->side == WHITE) ? p : P;
+        captured_sq = (board->side() == WHITE) ? to - 8 : to + 8;
+        captured = (board->side() == WHITE) ? p : P;
     }
 
     if (captured == 0 && !promo) {
@@ -211,9 +163,9 @@ static int see(const Board* board, int move) {
 
     U64 bb[12];
     for (int i = P; i <= k; i++) {
-        bb[i] = board->bitboards[i];
+        bb[i] = board->bitboard(i);
     }
-    U64 occupancy = board->occupancies[2];
+    U64 occupancy = board->occupancy(2);
 
     pop_bit(bb[piece], from);
     pop_bit(occupancy, from);
@@ -234,7 +186,7 @@ static int see(const Board* board, int move) {
         gain[0] += piece_values[promo] - piece_values[piece];
     }
 
-    int side = board->side ^ 1;
+    int side = board->side() ^ 1;
 
     while (depth < 31) {
         int attacker_sq = 0;
@@ -249,7 +201,13 @@ static int see(const Board* board, int move) {
             gain[depth] = -gain[depth - 1];
         }
 
-        int victim = see_piece_on(bb, to);
+        int victim = 0;
+        for (int p = P; p <= k; p++) {
+            if (get_bit(bb[p], to)) {
+                victim = p;
+                break;
+            }
+        }
         if (victim) {
             pop_bit(bb[victim], to);
         }
@@ -270,12 +228,12 @@ static int see(const Board* board, int move) {
     return gain[0];
 }
 
-static int score_move(int move, const Board* board) {
-    if (move == follow_pv_move) {
+int Search::score_move(int move, const Board* board) const {
+    if (move == follow_pv_move_) {
         return 3000000;
     }
 
-    if (move == current_tt_move) {
+    if (move == current_tt_move_) {
         return 2000000;
     }
 
@@ -290,7 +248,7 @@ static int score_move(int move, const Board* board) {
     return 0;
 }
 
-static void sort_moves(Moves* move_list, const Board* board) {
+void Search::sort_moves(Moves* move_list, const Board* board) {
     for (int i = 0; i < move_list->count - 1; i++) {
         for (int j = i + 1; j < move_list->count; j++) {
             int score_i = score_move(move_list->moves[i], board);
@@ -320,19 +278,19 @@ static std::string move_to_uci(int move) {
     return uci;
 }
 
-static int build_pv(const Board* board, int* pv, int max_len) {
+int Search::build_pv(const Board* board, int* pv, int max_len) const {
     Board temp = *board;
     int len = 0;
 
-    if (best_move != 0) {
-        pv[len++] = best_move;
-        if (!make_move(&temp, best_move, 0)) {
+    if (best_move_ != 0) {
+        pv[len++] = best_move_;
+        if (!make_move(&temp, best_move_, 0)) {
             return len;
         }
     }
 
     while (len < max_len) {
-        int tt_move = probe_tt_move(temp.hash_key);
+        int tt_move = probe_tt_move(temp.hash_key());
         if (tt_move == 0) {
             break;
         }
@@ -359,12 +317,12 @@ static int build_pv(const Board* board, int* pv, int max_len) {
     return len;
 }
 
-static void print_search_info(const Board* board, int depth, int score, long long elapsed) {
+void Search::print_search_info(const Board* board, int depth, int score, long long elapsed) const {
     int pv[64];
     int pv_len = build_pv(board, pv, 64);
 
     std::cout << "info depth " << depth
-              << " seldepth " << search_seldepth;
+              << " seldepth " << search_seldepth_;
 
     if (score >= MATE_SCORE - 256) {
         std::cout << " score mate " << (MATE_SCORE - score + 1) / 2;
@@ -374,11 +332,11 @@ static void print_search_info(const Board* board, int depth, int score, long lon
         std::cout << " score cp " << score;
     }
 
-    std::cout << " nodes " << nodes
+    std::cout << " nodes " << nodes_
               << " time " << elapsed;
 
     if (elapsed > 0) {
-        std::cout << " nps " << (nodes * 1000LL / elapsed);
+        std::cout << " nps " << (nodes_ * 1000LL / elapsed);
     }
 
     if (pv_len > 0) {
@@ -391,13 +349,13 @@ static void print_search_info(const Board* board, int depth, int score, long lon
     std::cout << std::endl;
 }
 
-static int quiescence(int alpha, int beta, int ply, Board* board) {
-    if (ply > search_seldepth) {
-        search_seldepth = ply;
+int Search::quiescence(int alpha, int beta, int ply, Board* board) {
+    if (ply > search_seldepth_) {
+        search_seldepth_ = ply;
     }
 
     check_time();
-    if (stop_search) {
+    if (stop_search_) {
         return 0;
     }
 
@@ -423,7 +381,7 @@ static int quiescence(int alpha, int beta, int ply, Board* board) {
     int legal_moves = 0;
 
     for (int i = 0; i < move_list->count; i++) {
-        if (stop_search) {
+        if (stop_search_) {
             break;
         }
 
@@ -441,9 +399,9 @@ static int quiescence(int alpha, int beta, int ply, Board* board) {
         }
         legal_moves++;
 
-        rep_stack[rep_ply++] = board->hash_key;
+        rep_stack_[rep_ply_++] = board->hash_key();
         int score = -quiescence(-beta, -alpha, ply + 1, board);
-        rep_ply--;
+        rep_ply_--;
 
         *board = copy;
 
@@ -462,11 +420,7 @@ static int quiescence(int alpha, int beta, int ply, Board* board) {
     return alpha;
 }
 
-#define NULL_MOVE_R 3
-#define CHECK_EXT 1
-#define ASPIRATION_WINDOW 50
-
-static int compute_lmr(int depth, int moves_searched, int move, int check) {
+int Search::compute_lmr(int depth, int moves_searched, int move, int check) {
     if (check) {
         return 0;
     }
@@ -493,13 +447,13 @@ static int compute_lmr(int depth, int moves_searched, int move, int check) {
     return r;
 }
 
-static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
-    if (ply > search_seldepth) {
-        search_seldepth = ply;
+int Search::negamax(int alpha, int beta, int depth, int ply, Board* board) {
+    if (ply > search_seldepth_) {
+        search_seldepth_ = ply;
     }
 
     check_time();
-    if (stop_search) {
+    if (stop_search_) {
         return 0;
     }
 
@@ -518,7 +472,7 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
     }
 
     int tt_score = 0;
-    TTFlag tt_flag = probe_tt(board->hash_key, depth, ply, alpha, beta, &tt_score, &current_tt_move);
+    TTFlag tt_flag = probe_tt(board->hash_key(), depth, ply, alpha, beta, &tt_score, &current_tt_move_);
 
     if (tt_flag == TT_EXACT) {
         return tt_score;
@@ -530,16 +484,15 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
         return tt_score;
     }
 
-    // Null move pruning: if passing the turn still fails high, cut off.
     int null_depth = depth - 1 - NULL_MOVE_R;
     if (null_depth >= 1 && !check && has_non_pawn_material(board)) {
         Board copy = *board;
-        apply_null_move(board);
-        rep_stack[rep_ply++] = board->hash_key;
+        board->apply_null_move();
+        rep_stack_[rep_ply_++] = board->hash_key();
 
         int null_score = -negamax(-beta, -beta + 1, null_depth, ply + 1, board);
 
-        rep_ply--;
+        rep_ply_--;
         *board = copy;
 
         if (null_score >= beta) {
@@ -555,10 +508,10 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
 
     int legal_moves = 0;
     int moves_searched = 0;
-    int best_move_store = current_tt_move;
+    int best_move_store = current_tt_move_;
 
     for (int i = 0; i < move_list->count; i++) {
-        if (stop_search) {
+        if (stop_search_) {
             break;
         }
 
@@ -576,7 +529,7 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
             search_depth = 1;
         }
 
-        rep_stack[rep_ply++] = board->hash_key;
+        rep_stack_[rep_ply_++] = board->hash_key();
 
         int score;
         if (reduction > 0) {
@@ -593,7 +546,7 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
             }
         }
 
-        rep_ply--;
+        rep_ply_--;
         *board = copy;
         moves_searched++;
 
@@ -602,20 +555,19 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
             best_move_store = move_list->moves[i];
 
             if (alpha >= beta) {
-                store_tt(board->hash_key, depth, ply, beta, TT_BETA, best_move_store);
+                store_tt(board->hash_key(), depth, ply, beta, TT_BETA, best_move_store);
                 return beta;
             }
         }
     }
 
     if (legal_moves == 0) {
-        int king_sq = get_LSB(board->bitboards[(board->side == WHITE) ? K : k]);
+        int king_sq = get_LSB(board->bitboard((board->side() == WHITE) ? K : k));
 
-        if (is_square_attacked(king_sq, board->side ^ 1, board)) {
+        if (is_square_attacked(king_sq, board->side() ^ 1, board)) {
             return -MATE_SCORE + ply;
-        } else {
-            return 0;
         }
+        return 0;
     }
 
     TTFlag flag = TT_EXACT;
@@ -623,13 +575,13 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
         flag = TT_ALPHA;
     }
 
-    store_tt(board->hash_key, depth, ply, alpha, flag, best_move_store);
+    store_tt(board->hash_key(), depth, ply, alpha, flag, best_move_store);
 
     return alpha;
 }
 
-static int search_root(Board* board, int depth, int alpha, int beta) {
-    search_seldepth = 0;
+int Search::search_root(Board* board, int depth, int alpha, int beta) {
+    search_seldepth_ = 0;
 
     int best_score = -INF;
     int iteration_best_move = 0;
@@ -639,7 +591,7 @@ static int search_root(Board* board, int depth, int alpha, int beta) {
     sort_moves(move_list, board);
 
     for (int i = 0; i < move_list->count; i++) {
-        if (stop_search) {
+        if (stop_search_) {
             break;
         }
 
@@ -649,9 +601,9 @@ static int search_root(Board* board, int depth, int alpha, int beta) {
             continue;
         }
 
-        rep_stack[rep_ply++] = board->hash_key;
+        rep_stack_[rep_ply_++] = board->hash_key();
         int score = -negamax(-beta, -alpha, depth - 1, 1, board);
-        rep_ply--;
+        rep_ply_--;
 
         *board = copy;
 
@@ -666,14 +618,14 @@ static int search_root(Board* board, int depth, int alpha, int beta) {
         }
     }
 
-    if (iteration_best_move != 0 && !stop_search) {
-        best_move = iteration_best_move;
+    if (iteration_best_move != 0 && !stop_search_) {
+        best_move_ = iteration_best_move;
     }
 
     return best_score;
 }
 
-static int search_root_aspiration(Board* board, int depth, int prev_score) {
+int Search::search_root_aspiration(Board* board, int depth, int prev_score) {
     int alpha = -INF;
     int beta = INF;
 
@@ -698,35 +650,35 @@ static int search_root_aspiration(Board* board, int depth, int prev_score) {
     }
 }
 
-static bool should_start_next_depth(int current_depth, long long elapsed_ms) {
-    if (search_time_limit_ms < 0) {
+bool Search::should_start_next_depth(int current_depth, long long elapsed_ms) const {
+    if (search_time_limit_ms_ < 0) {
         return true;
     }
 
-    if (elapsed_ms >= search_time_limit_ms) {
+    if (elapsed_ms >= search_time_limit_ms_) {
         return false;
     }
 
     long long avg_per_depth = elapsed_ms / current_depth;
-    return elapsed_ms + avg_per_depth <= search_time_limit_ms * 95 / 100;
+    return elapsed_ms + avg_per_depth <= search_time_limit_ms_ * 95 / 100;
 }
 
-void search_position(Board* board, const SearchLimits& limits) {
-    stop_search = false;
-    follow_pv_move = 0;
-    current_tt_move = 0;
-    best_move = 0;
-    nodes = 0;
-    search_start_ms = now_ms();
-    search_time_limit_ms = allocate_time_ms(board, limits);
+void Search::search_position(Board* board, const SearchLimits& limits) {
+    stop_search_ = false;
+    follow_pv_move_ = 0;
+    current_tt_move_ = 0;
+    best_move_ = 0;
+    nodes_ = 0;
+    search_start_ms_ = now_ms();
+    search_time_limit_ms_ = allocate_time_ms(board, limits);
 
-    rep_ply = 0;
-    for (int i = 0; i < game_history_len && rep_ply < MAX_SEARCH_REP; i++) {
-        rep_stack[rep_ply++] = game_history[i];
+    rep_ply_ = 0;
+    for (int i = 0; i < game_history_len_ && rep_ply_ < MAX_SEARCH_REP; i++) {
+        rep_stack_[rep_ply_++] = game_history_[i];
     }
 
     SearchLimits effective = limits;
-    if (effective.depth == 0 && search_time_limit_ms < 0 && !effective.infinite) {
+    if (effective.depth == 0 && search_time_limit_ms_ < 0 && !effective.infinite) {
         effective.depth = 6;
     }
 
@@ -734,22 +686,22 @@ void search_position(Board* board, const SearchLimits& limits) {
     int last_score = 0;
 
     for (int depth = 1; depth <= max_depth; depth++) {
-        if (stop_search) {
+        if (stop_search_) {
             break;
         }
 
         last_score = search_root_aspiration(board, depth, last_score);
 
-        if (!stop_search && best_move != 0) {
-            follow_pv_move = best_move;
+        if (!stop_search_ && best_move_ != 0) {
+            follow_pv_move_ = best_move_;
         }
 
-        long long elapsed = now_ms() - search_start_ms;
+        long long elapsed = now_ms() - search_start_ms_;
         if (!limits.quiet) {
             print_search_info(board, depth, last_score, elapsed);
         }
 
-        if (stop_search) {
+        if (stop_search_) {
             break;
         }
 
@@ -757,11 +709,11 @@ void search_position(Board* board, const SearchLimits& limits) {
             break;
         }
 
-        if (search_time_limit_ms >= 0 && elapsed >= search_time_limit_ms) {
+        if (search_time_limit_ms_ >= 0 && elapsed >= search_time_limit_ms_) {
             break;
         }
 
-        if (search_time_limit_ms >= 0 && !should_start_next_depth(depth, elapsed)) {
+        if (search_time_limit_ms_ >= 0 && !should_start_next_depth(depth, elapsed)) {
             break;
         }
     }
@@ -770,10 +722,10 @@ void search_position(Board* board, const SearchLimits& limits) {
         return;
     }
 
-    if (best_move == 0) {
+    if (best_move_ == 0) {
         std::cout << "bestmove (none)" << std::endl;
         return;
     }
 
-    std::cout << "bestmove " << move_to_uci(best_move) << std::endl;
+    std::cout << "bestmove " << move_to_uci(best_move_) << std::endl;
 }

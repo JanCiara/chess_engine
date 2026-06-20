@@ -1,7 +1,7 @@
 #include "draw.h"
 
 static int count_pieces(const Board* board, int piece) {
-    return count_bits(board->bitboards[piece]);
+    return count_bits(board->bitboard(piece));
 }
 
 static int bishop_color(int square) {
@@ -9,10 +9,10 @@ static int bishop_color(int square) {
 }
 
 bool is_insufficient_material(const Board* board) {
-    if (board->bitboards[P] || board->bitboards[p]) {
+    if (board->bitboard(P) || board->bitboard(p)) {
         return false;
     }
-    if (board->bitboards[R] || board->bitboards[r] || board->bitboards[Q] || board->bitboards[q]) {
+    if (board->bitboard(R) || board->bitboard(r) || board->bitboard(Q) || board->bitboard(q)) {
         return false;
     }
 
@@ -31,9 +31,9 @@ bool is_insufficient_material(const Board* board) {
 
     if (white_minors == 1 && black_minors == 1
         && count_pieces(board, B) == 1 && count_pieces(board, b) == 1
-        && !board->bitboards[N] && !board->bitboards[n]) {
-        int white_bishop = get_LSB(board->bitboards[B]);
-        int black_bishop = get_LSB(board->bitboards[b]);
+        && !board->bitboard(N) && !board->bitboard(n)) {
+        int white_bishop = get_LSB(board->bitboard(B));
+        int black_bishop = get_LSB(board->bitboard(b));
         return bishop_color(white_bishop) == bishop_color(black_bishop);
     }
 
@@ -41,7 +41,7 @@ bool is_insufficient_material(const Board* board) {
 }
 
 bool is_fifty_move_draw(const Board* board) {
-    return board->half_move_clock >= 100;
+    return board->half_move_clock() >= 100;
 }
 
 bool is_draw(const Board* board) {

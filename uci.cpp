@@ -53,7 +53,7 @@ int parse_uci_move(Board* board, const std::string& move_string) {
     return 0;
 }
 
-void parse_position(Board* board, std::string command) {
+void parse_position(Board* board, Search* search, std::string command) {
     std::stringstream ss(command);
     std::string token;
     ss >> token; // "position"
@@ -75,8 +75,8 @@ void parse_position(Board* board, std::string command) {
         // token is now "moves" (handled below) or unchanged at end of stream.
     }
 
-    game_history_reset();
-    game_history_push(board->hash_key);
+    search->game_history_reset();
+    search->game_history_push(board->hash_key());
 
     if (token == "moves") {
         std::string move_str;
@@ -84,13 +84,13 @@ void parse_position(Board* board, std::string command) {
             int move = parse_uci_move(board, move_str);
             if (move != 0) {
                 make_move(board, move, 0);
-                game_history_push(board->hash_key);
+                search->game_history_push(board->hash_key());
             }
         }
     }
 }
 
-void parse_go(Board* board, std::string command) {
+void parse_go(Board* board, Search* search, std::string command) {
     SearchLimits limits;
     int perft_depth = 0;
 
@@ -126,11 +126,12 @@ void parse_go(Board* board, std::string command) {
         return;
     }
 
-    search_position(board, limits);
+    search->search_position(board, limits);
 }
 
 void uci_loop() {
     Board board;
+    Search search;
     std::string line, token;
 
     std::cout.setf(std::ios::unitbuf);
@@ -148,17 +149,17 @@ void uci_loop() {
             std::cout << "readyok" << std::endl;
         }
         else if (token == "position") {
-            parse_position(&board, line);
+            parse_position(&board, &search, line);
         }
         else if (token == "ucinewgame") {
             clear_tt();
-            parse_position(&board, "position startpos");
+            parse_position(&board, &search, "position startpos");
         }
         else if (token == "go") {
-            parse_go(&board, line);
+            parse_go(&board, &search, line);
         }
         else if (token == "stop") {
-            request_stop();
+            search.request_stop();
         }
         else if (token == "bench") {
             int depth = BENCH_DEFAULT_DEPTH;

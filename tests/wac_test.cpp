@@ -41,6 +41,7 @@ int main() {
     }
 
     Board board;
+    Search search;
     int total = 0;
     int solved = 0;
     std::string line;
@@ -53,22 +54,22 @@ int main() {
 
         total++;
         board.parseFEN(position.fen);
-        game_history_reset();
-        game_history_push(board.hash_key);
+        search.game_history_reset();
+        search.game_history_push(board.hash_key());
 
         SearchLimits limits;
         limits.depth = WAC_SEARCH_DEPTH;
         limits.quiet = true;
-        search_position(&board, limits);
+        search.search_position(&board, limits);
 
-        bool pass = move_is_solution(&board, best_move, position);
+        bool pass = move_is_solution(&board, search.best_move(), position);
         if (pass) {
             solved++;
         }
 
         std::cout << (pass ? "[PASS] " : "[FAIL] ")
                   << position.id
-                  << " best=" << (best_move ? move_to_uci(best_move) : "(none)")
+                  << " best=" << (search.best_move() ? move_to_uci(search.best_move()) : "(none)")
                   << " expected=";
         for (size_t i = 0; i < position.best_moves.size(); i++) {
             if (i > 0) {

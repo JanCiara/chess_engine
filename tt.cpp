@@ -66,7 +66,7 @@ U64 compute_hash(const Board* board) {
     U64 hash = 0;
 
     for (int piece = P; piece <= k; piece++) {
-        U64 bitboard = board->bitboards[piece];
+        U64 bitboard = board->bitboard(piece);
         while (bitboard) {
             int square = get_LSB(bitboard);
             hash ^= piece_keys[piece][square];
@@ -74,12 +74,12 @@ U64 compute_hash(const Board* board) {
         }
     }
 
-    if (board->side == BLACK) {
+    if (board->side() == BLACK) {
         hash ^= side_key;
     }
 
-    hash ^= castle_keys[board->castle & 15];
-    hash ^= ep_keys[board->en_passant == -1 ? 64 : board->en_passant];
+    hash ^= castle_keys[board->castle_rights() & 15];
+    hash ^= ep_keys[board->en_passant() == -1 ? 64 : board->en_passant()];
 
     return hash;
 }
