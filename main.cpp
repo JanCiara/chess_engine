@@ -5,7 +5,6 @@
 
 int main() {
     init_zobrist();
-    init_all_attacks();
     uci_loop();
 
     return 0;

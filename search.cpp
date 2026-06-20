@@ -1,7 +1,7 @@
 #include <chrono>
 #include <iostream>
-#include <string>
 #include "search.h"
+#include "uci.h"
 #include "tt.h"
 #include "draw.h"
 
@@ -249,33 +249,32 @@ int Search::score_move(int move, const Board* board) const {
 }
 
 void Search::sort_moves(Moves* move_list, const Board* board) {
-    for (int i = 0; i < move_list->count - 1; i++) {
-        for (int j = i + 1; j < move_list->count; j++) {
-            int score_i = score_move(move_list->moves[i], board);
-            int score_j = score_move(move_list->moves[j], board);
-            if (score_j > score_i) {
-                int temp = move_list->moves[i];
-                move_list->moves[i] = move_list->moves[j];
-                move_list->moves[j] = temp;
-            }
+    struct ScoredMove {
+        int move;
+        int score;
+    };
+
+    ScoredMove scored[256];
+    const int count = move_list->count;
+
+    for (int i = 0; i < count; i++) {
+        scored[i].move = move_list->moves[i];
+        scored[i].score = score_move(move_list->moves[i], board);
+    }
+
+    for (int i = 1; i < count; i++) {
+        ScoredMove key = scored[i];
+        int j = i - 1;
+        while (j >= 0 && scored[j].score < key.score) {
+            scored[j + 1] = scored[j];
+            j--;
         }
-    }
-}
-
-static std::string move_to_uci(int move) {
-    std::string uci = Board::int_to_sq(get_move_source(move))
-                    + Board::int_to_sq(get_move_target(move));
-
-    int promo = get_move_promoted(move);
-    if (promo) {
-        char c = 'q';
-        if (promo == R || promo == r) c = 'r';
-        else if (promo == B || promo == b) c = 'b';
-        else if (promo == N || promo == n) c = 'n';
-        uci += c;
+        scored[j + 1] = key;
     }
 
-    return uci;
+    for (int i = 0; i < count; i++) {
+        move_list->moves[i] = scored[i].move;
+    }
 }
 
 int Search::build_pv(const Board* board, int* pv, int max_len) const {
@@ -284,13 +283,14 @@ int Search::build_pv(const Board* board, int* pv, int max_len) const {
 
     if (best_move_ != 0) {
         pv[len++] = best_move_;
-        if (!make_move(&temp, best_move_, 0)) {
+        Undo undo;
+        if (!make_move(&temp, best_move_, &undo, 0)) {
             return len;
         }
     }
 
     while (len < max_len) {
-        int tt_move = probe_tt_move(temp.hash_key());
+        int tt_move = probe_tt_move(&temp, temp.hash_key());
         if (tt_move == 0) {
             break;
         }
@@ -309,7 +309,8 @@ int Search::build_pv(const Board* board, int* pv, int max_len) const {
         }
 
         pv[len++] = tt_move;
-        if (!make_move(&temp, tt_move, 0)) {
+        Undo undo;
+        if (!make_move(&temp, tt_move, &undo, 0)) {
             break;
         }
     }
@@ -341,8 +342,10 @@ void Search::print_search_info(const Board* board, int depth, int score, long lo
 
     if (pv_len > 0) {
         std::cout << " pv";
+        char uci[6];
         for (int i = 0; i < pv_len; i++) {
-            std::cout << " " << move_to_uci(pv[i]);
+            move_to_uci(pv[i], uci);
+            std::cout << " " << uci;
         }
     }
 
@@ -393,8 +396,8 @@ int Search::quiescence(int alpha, int beta, int ply, Board* board) {
             continue;
         }
 
-        Board copy = *board;
-        if (!make_move(board, move, 0)) {
+        Undo undo;
+        if (!make_move(board, move, &undo, 0)) {
             continue;
         }
         legal_moves++;
@@ -403,7 +406,7 @@ int Search::quiescence(int alpha, int beta, int ply, Board* board) {
         int score = -quiescence(-beta, -alpha, ply + 1, board);
         rep_ply_--;
 
-        *board = copy;
+        undo_move(board, &undo);
 
         if (score >= beta) {
             return beta;
@@ -472,7 +475,7 @@ int Search::negamax(int alpha, int beta, int depth, int ply, Board* board) {
     }
 
     int tt_score = 0;
-    TTFlag tt_flag = probe_tt(board->hash_key(), depth, ply, alpha, beta, &tt_score, &current_tt_move_);
+    TTFlag tt_flag = probe_tt(board, board->hash_key(), depth, ply, alpha, beta, &tt_score, &current_tt_move_);
 
     if (tt_flag == TT_EXACT) {
         return tt_score;
@@ -486,14 +489,14 @@ int Search::negamax(int alpha, int beta, int depth, int ply, Board* board) {
 
     int null_depth = depth - 1 - NULL_MOVE_R;
     if (null_depth >= 1 && !check && has_non_pawn_material(board)) {
-        Board copy = *board;
-        board->apply_null_move();
+        Board::NullUndo null_undo;
+        board->apply_null_move(&null_undo);
         rep_stack_[rep_ply_++] = board->hash_key();
 
         int null_score = -negamax(-beta, -beta + 1, null_depth, ply + 1, board);
 
         rep_ply_--;
-        *board = copy;
+        board->undo_null_move(&null_undo);
 
         if (null_score >= beta) {
             return beta;
@@ -515,9 +518,8 @@ int Search::negamax(int alpha, int beta, int depth, int ply, Board* board) {
             break;
         }
 
-        Board copy = *board;
-
-        if (!make_move(board, move_list->moves[i], 0)) {
+        Undo undo;
+        if (!make_move(board, move_list->moves[i], &undo, 0)) {
             continue;
         }
         legal_moves++;
@@ -547,7 +549,7 @@ int Search::negamax(int alpha, int beta, int depth, int ply, Board* board) {
         }
 
         rep_ply_--;
-        *board = copy;
+        undo_move(board, &undo);
         moves_searched++;
 
         if (score > alpha) {
@@ -595,9 +597,8 @@ int Search::search_root(Board* board, int depth, int alpha, int beta) {
             break;
         }
 
-        Board copy = *board;
-
-        if (!make_move(board, move_list->moves[i], 0)) {
+        Undo undo;
+        if (!make_move(board, move_list->moves[i], &undo, 0)) {
             continue;
         }
 
@@ -605,7 +606,7 @@ int Search::search_root(Board* board, int depth, int alpha, int beta) {
         int score = -negamax(-beta, -alpha, depth - 1, 1, board);
         rep_ply_--;
 
-        *board = copy;
+        undo_move(board, &undo);
 
         if (score > best_score) {
             best_score = score;
@@ -727,5 +728,7 @@ void Search::search_position(Board* board, const SearchLimits& limits) {
         return;
     }
 
-    std::cout << "bestmove " << move_to_uci(best_move_) << std::endl;
+    char uci[6];
+    move_to_uci(best_move_, uci);
+    std::cout << "bestmove " << uci << std::endl;
 }

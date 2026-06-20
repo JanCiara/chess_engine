@@ -4,34 +4,34 @@
 
 using U64 = uint64_t;
 
-inline bool get_bit(U64 bitboard, int square) {
+inline constexpr bool get_bit(U64 bitboard, int square) {
     return (bitboard & (1ULL << square)) != 0;
 }
 
-inline void set_bit(U64& bitboard, int square) {
+inline constexpr void set_bit(U64& bitboard, int square) {
     bitboard |= (1ULL << square);
 }
 
-inline void pop_bit(U64& bitboard, int square) {
+inline constexpr void pop_bit(U64& bitboard, int square) {
     bitboard &= ~(1ULL << square);
 }
 
 inline constexpr int ROW(int square) { return square >> 3; }
 inline constexpr int COL(int square) { return square & 7; }
 
-inline int count_bits(U64 b) {
+inline constexpr int count_bits(U64 b) {
     return static_cast<int>(std::popcount(b));
 }
 
-inline int get_LSB(U64 b) {
+inline constexpr int get_LSB(U64 b) {
     return static_cast<int>(std::countr_zero(b));
 }
 
-inline int get_MSB(U64 b) {
+inline constexpr int get_MSB(U64 b) {
     return static_cast<int>(std::bit_width(b) - 1);
 }
 
-inline int pop_LSB(U64& b) {
+inline constexpr int pop_LSB(U64& b) {
     int i = get_LSB(b);
     b &= b - 1;
     return i;
@@ -63,6 +63,25 @@ constexpr U64 notAFile  = 0xFEFEFEFEFEFEFEFEULL;
 constexpr U64 notABFile = 0xFCFCFCFCFCFCFCFCULL;
 constexpr U64 notHFile  = 0x7F7F7F7F7F7F7F7FULL;
 constexpr U64 notGHFile = 0x3F3F3F3F3F3F3F3FULL;
+
+// Leaper attack shifts (used by compile-time attack tables)
+inline constexpr U64 noNoEa(U64 b) { return (b & notHFile) << 17; }
+inline constexpr U64 noEaEa(U64 b) { return (b & notGHFile) << 10; }
+inline constexpr U64 soEaEa(U64 b) { return (b & notGHFile) >> 6; }
+inline constexpr U64 soSoEa(U64 b) { return (b & notHFile) >> 15; }
+inline constexpr U64 noNoWe(U64 b) { return (b & notAFile) << 15; }
+inline constexpr U64 noWeWe(U64 b) { return (b & notABFile) << 6; }
+inline constexpr U64 soWeWe(U64 b) { return (b & notABFile) >> 10; }
+inline constexpr U64 soSoWe(U64 b) { return (b & notAFile) >> 17; }
+
+inline constexpr U64 noOne(U64 b) { return b << 8; }
+inline constexpr U64 eaOne(U64 b) { return (b & notHFile) << 1; }
+inline constexpr U64 weOne(U64 b) { return (b & notAFile) >> 1; }
+inline constexpr U64 soOne(U64 b) { return b >> 8; }
+inline constexpr U64 noEaOne(U64 b) { return (b & notHFile) << 9; }
+inline constexpr U64 noWeOne(U64 b) { return (b & notAFile) << 7; }
+inline constexpr U64 soWeOne(U64 b) { return (b & notAFile) >> 9; }
+inline constexpr U64 soEaOne(U64 b) { return (b & notHFile) >> 7; }
 
 /*
     Move encoding in 32-bit int:

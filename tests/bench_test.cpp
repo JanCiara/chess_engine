@@ -10,7 +10,6 @@ static constexpr long long EXPECTED_BENCH_NODES = 33096264LL;
 
 int main() {
     init_zobrist();
-    init_all_attacks();
 
     BenchResult result = run_bench(BENCH_DEFAULT_DEPTH, true);
 

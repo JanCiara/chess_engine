@@ -21,10 +21,23 @@ int Board::piece_at(int square) const {
     return -1;
 }
 
-void Board::apply_null_move() {
+void Board::sq_to_chars(int square, char out[2]) {
+    out[0] = static_cast<char>('a' + (square % 8));
+    out[1] = static_cast<char>('1' + (square / 8));
+}
+
+void Board::apply_null_move(NullUndo* undo) {
+    undo->hash_key = hash_key_;
+    undo->en_passant = en_passant_;
     flip_side();
     clear_en_passant();
     set_hash_key(compute_hash(this));
+}
+
+void Board::undo_null_move(const NullUndo* undo) {
+    flip_side();
+    en_passant_ = undo->en_passant;
+    hash_key_ = undo->hash_key;
 }
 
 int Board::sq_to_int(const std::string &square) {
@@ -35,15 +48,9 @@ int Board::sq_to_int(const std::string &square) {
 }
 
 std::string Board::int_to_sq(int square) {
-    std::string s;
-
-    const int file = square % 8;
-    const int rank = square / 8;
-
-    s += ('a' + file);
-    s += ('1' + rank);
-
-    return s;
+    char sq[2];
+    sq_to_chars(square, sq);
+    return std::string(sq, 2);
 }
 
 void Board::init_start_position() {

@@ -1,5 +1,5 @@
-# Build outputs
-build/
+# Build outputs (build/, build-lto-test/, build-pgo-test/, etc.)
+build*/
 out/
 cmake-build-*/
 CMakeFiles/
@@ -7,6 +7,12 @@ CMakeCache.txt
 cmake_install.cmake
 Makefile
 compile_commands.json
+
+# PGO profile data (MSVC + Clang/GCC)
+*.profdata
+*.profraw
+*.pgd
+*.pgc
 
 # Binaries
 *.exe

@@ -32,6 +32,7 @@ public:
 
     static int sq_to_int(const std::string& square);
     static std::string int_to_sq(int square);
+    static void sq_to_chars(int square, char out[2]);
 
     int side() const { return side_; }
     void flip_side() { side_ ^= 1; }
@@ -65,7 +66,13 @@ public:
     void increment_full_move_counter() { full_move_counter_++; }
 
     int piece_at(int square) const;
-    void apply_null_move();
+
+    struct NullUndo {
+        U64 hash_key = 0;
+        int en_passant = -1;
+    };
+    void apply_null_move(NullUndo* undo);
+    void undo_null_move(const NullUndo* undo);
 
 private:
     U64 bitboards_[12] = {0ULL};

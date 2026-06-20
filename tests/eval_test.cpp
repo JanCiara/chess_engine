@@ -70,7 +70,6 @@ static bool run_case(const EvalCase& test) {
 
 int main() {
     init_zobrist();
-    init_all_attacks();
 
     int failed = 0;
     for (const auto& test : EVAL_CASES) {

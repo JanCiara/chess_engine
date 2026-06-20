@@ -21,9 +21,10 @@ static bool move_is_solution(Board* board, int move, const EpdPosition& position
         return false;
     }
 
-    std::string uci = move_to_uci(move);
+    char uci[6];
+    move_to_uci(move, uci);
     for (const auto& expected : position.best_moves) {
-        if (uci == expected) {
+        if (expected == uci) {
             return true;
         }
     }
@@ -32,7 +33,6 @@ static bool move_is_solution(Board* board, int move, const EpdPosition& position
 
 int main() {
     init_zobrist();
-    init_all_attacks();
 
     std::ifstream input(WAC_EPD_PATH);
     if (!input) {
@@ -69,7 +69,15 @@ int main() {
 
         std::cout << (pass ? "[PASS] " : "[FAIL] ")
                   << position.id
-                  << " best=" << (search.best_move() ? move_to_uci(search.best_move()) : "(none)")
+                  << " best=";
+        if (search.best_move()) {
+            char best_uci[6];
+            move_to_uci(search.best_move(), best_uci);
+            std::cout << best_uci;
+        } else {
+            std::cout << "(none)";
+        }
+        std::cout
                   << " expected=";
         for (size_t i = 0; i < position.best_moves.size(); i++) {
             if (i > 0) {

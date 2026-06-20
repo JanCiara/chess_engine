@@ -2,107 +2,26 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/JanCiara/chess_engine/ci.yml?branch=main&label=CI)](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml)
 
-A bitboard-based chess engine with UCI protocol support.
+**C++20 UCI chess engine — ~900k NPS search benchmark (Release, depth 8)**
+
+Bitboard move generation, Negamax search with alpha-beta pruning, and a Zobrist-backed transposition table. Built for speed and correctness, with regression tests on every push.
 
 **Author:** janek
 
-## Features
+---
 
-- Bitboard move generation (magic bitboards for sliders)
-- Negamax search with alpha-beta pruning
-- Iterative deepening and time management (`wtime` / `btime` / `movetime`)
-- Quiescence search (captures and promotions)
-- MVV-LVA move ordering and PV move from previous iteration
-- Transposition table (Zobrist hashing)
-- Draw detection: 50-move rule, threefold repetition, insufficient material
+## Performance
 
-## Requirements
+| Benchmark | Result | Notes |
+|-----------|--------|-------|
+| **Search bench** | **~900k NPS** | 48-position Stockfish-style suite, depth 8, ~33M nodes |
+| **Perft** | **~19M NPS** | Starting position, depth 5 (~4.9M nodes) |
+| **WAC tactics** | **76%** (23/30) | Win At Chess suite at depth 10 |
 
-- CMake 3.20 or newer
-- C++20 compiler (GCC 10+, Clang 12+, MSVC 2019 16.11+)
-
-## Build
-
-```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-```
-
-On Windows with Visual Studio:
-
-```powershell
-cmake -B build
-cmake --build build --config Release
-```
-
-The executable is written to `build/chess_engine` (Unix) or `build/Release/chess_engine.exe` (MSVC multi-config).
-
-Release builds use `-O2 -march=native` (GCC/Clang) or `/O2` (MSVC).
-
-### Run tests
-
-```bash
-cmake --build build
-ctest --test-dir build --output-on-failure
-# or directly:
-./build/unit_test
-./build/perft_test
-./build/bench_test
-./build/wac_test
-```
-
-| Test | Type | What it checks |
-|------|------|----------------|
-| `unit_test` | Unit (GTest) | Isolated helpers: bitboards, move encoding, FEN/EPD parsing, Zobrist hash, draw rules, TT store/probe |
-| `perft_test` | Integration / regression | Move generation node counts + perft NPS benchmark |
-| `bench_test` | Integration / regression | Fixed-position search bench: repeatable total nodes at depth 8 |
-| `wac_test` | Integration / regression | WAC EPD tactical suite: % of positions with correct best move (depth 10) |
-| `eval_test` | Integration / regression | Evaluation score regression on fixed positions |
-
-Results are published in the [CI workflow summary](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml) on every push.
-
-## UCI usage
-
-Run the engine and connect it to a UCI-compatible GUI (Arena, Cute Chess, Lichess Bot, etc.):
-
-```bash
-./build/chess_engine
-```
-
-Example commands:
+Numbers vary by CPU and compiler; run the commands below on your machine to reproduce.
 
 ```
-uci
-isready
-position startpos
-go depth 8
-position startpos moves e2e4 e7e5
-go wtime 60000 btime 60000 winc 1000 binc 1000
-go perft 5
-bench
 bench 8
-quit
-```
-
-### Supported `go` options
-
-| Option | Description |
-|--------|-------------|
-| `depth N` | Search to depth N |
-| `movetime N` | Search for N milliseconds |
-| `wtime` / `btime` | Remaining clock (ms) |
-| `winc` / `binc` | Increment per move (ms) |
-| `movestogo` | Moves until time control |
-| `infinite` | Search until `stop` |
-| `perft N` | Perft division to depth N |
-
-### `bench`
-
-Stockfish-style search benchmark over a fixed set of 48 positions. Runs a quiet depth-limited search on each position and prints total nodes and NPS — useful for regression testing and comparing builds:
-
-```
-bench      # default depth 8
-bench 10   # custom depth
 ```
 
 Example output:
@@ -114,40 +33,110 @@ Nodes searched  : 33096264
 Nodes/second    : 905333
 ```
 
+Perft speed (move generation only):
+
+```bash
+./build/perft_test   # prints benchmark depth=5 ... nps=...
+```
+
+---
+
+## Architecture
+
+**Bitboards** — Board state uses 64-bit bitboards per piece type. Sliders use magic bitboards (precomputed attack tables); leapers and pawns use lookup tables. Moves are generated incrementally with make/unmake and a compact undo stack.
+
+**Negamax** — Iterative deepening with alpha-beta pruning, aspiration windows, null-move pruning, late move reductions (LMR), check extensions, and quiescence search (captures and promotions). Move ordering: hash move from TT, PV move from the previous iteration, MVV-LVA for captures.
+
+**Transposition table (TT)** — 16-byte entries (4 per cache line) keyed by Zobrist hash; stores depth, score, bound flag, and best move for cutoffs and move ordering.
+
+Additional features: piece-square evaluation, 50-move / threefold / insufficient-material draw detection, UCI time management (`wtime`, `btime`, `movetime`, increments).
+
+---
+
+## Build
+
+**Requirements:** CMake 3.20+, C++20 (GCC 10+, Clang 12+, MSVC 2019 16.11+)
+
+### Linux / macOS
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+Binary: `build/chess_engine`
+
+Release builds use `-O2 -march=native` (GCC/Clang). Link-time optimization (LTO) is enabled by default.
+
+### Windows (Visual Studio)
+
+```powershell
+cmake -B build
+cmake --build build --config Release
+```
+
+Binary: `build/Release/chess_engine.exe`
+
+### Tests
+
+```bash
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+On Windows, add `-C Release` to `ctest`. CI publishes bench and perft numbers in the [workflow summary](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml) on every push.
+
+| Target | What it checks |
+|--------|----------------|
+| `unit_test` | Bitboards, move encoding, FEN/EPD, Zobrist, draw rules, TT |
+| `perft_test` | Perft node counts + perft NPS |
+| `bench_test` | Search bench node count at depth 8 (regression) |
+| `wac_test` | WAC tactical suite at depth 10 |
+| `eval_test` | Evaluation score regression |
+
+---
+
+## UCI
+
+Connect to any UCI GUI (Arena, Cute Chess, Lichess Bot, etc.):
+
+```bash
+./build/chess_engine
+```
+
+```
+uci
+isready
+position startpos
+go depth 8
+bench 8
+go perft 5
+quit
+```
+
+| `go` option | Description |
+|-------------|-------------|
+| `depth N` | Search to depth N |
+| `movetime N` | Search for N ms |
+| `wtime` / `btime` | Remaining clock (ms) |
+| `winc` / `binc` | Increment per move (ms) |
+| `movestogo` | Moves until time control |
+| `infinite` | Search until `stop` |
+| `perft N` | Perft division to depth N |
+
+---
+
 ## Project layout
 
 | File | Role |
 |------|------|
 | `board.cpp` | Board state, FEN parsing |
-| `movegen.cpp` | Move generation, `make_move`, perft |
-| `evaluate.cpp` | Piece-square tables evaluation |
-| `search.cpp` | Search, iterative deepening |
-| `tt.cpp` | Zobrist keys and transposition table |
-| `draw.cpp` | Draw detection helpers |
+| `movegen.cpp` | Bitboard movegen, magic bitboards, perft |
+| `evaluate.cpp` | Piece-square tables |
+| `search.cpp` | Negamax, iterative deepening |
+| `tt.cpp` | Zobrist hashing, transposition table |
+| `draw.cpp` | Draw detection |
 | `bench.cpp` | Fixed-position search benchmark |
-| `epd.cpp` | EPD line parser (`bm`, `id`) |
-| `uci.cpp` | UCI protocol loop |
-| `tests/unit_test.cpp` | GTest unit tests (isolated functions, no full search) |
-| `tests/perft_test.cpp` | Perft regression suite and NPS benchmark |
-| `tests/bench_test.cpp` | Search bench regression (node count) |
-| `tests/wac_test.cpp` | WAC tactical EPD suite |
-| `tests/wac.epd` | 30 WAC positions (UCI `bm` moves) |
+| `uci.cpp` | UCI protocol |
 
-## Perft sanity check
-
-From the starting position, depth 3 should report **8902** nodes:
-
-```
-position startpos
-go perft 3
-```
-
-## WAC tactical suite
-
-The engine loads `tests/wac.epd` (30 positions from the classic Win At Chess set) and reports the solve rate at depth 10, e.g.:
-
-```
-wac depth=10 solved=23/30 (76%)
-```
-
-Run via `ctest` or `./build/wac_test`.
+Automated Elo/SPRT testing against reference engines: `python run_elo_tests.py` (requires [cutechess-cli](https://github.com/cutechess/cutechess)).

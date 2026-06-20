@@ -229,12 +229,14 @@ TEST_F(EngineFixture, TranspositionTableStoreAndProbeExact) {
 
     int score = 0;
     int move = 0;
-    const TTFlag flag = probe_tt(key, 8, 0, -1000, 1000, &score, &move);
+    Board board;
+    board.init_start_position();
+    const TTFlag flag = probe_tt(&board, key, 8, 0, -1000, 1000, &score, &move);
 
     EXPECT_EQ(flag, TT_EXACT);
     EXPECT_EQ(score, 42);
     EXPECT_EQ(move, stored_move);
-    EXPECT_EQ(probe_tt_move(key), stored_move);
+    EXPECT_EQ(probe_tt_move(&board, key), stored_move);
 }
 
 TEST_F(EngineFixture, TranspositionTableProbeMissOnShallowDepth) {
@@ -243,8 +245,10 @@ TEST_F(EngineFixture, TranspositionTableProbeMissOnShallowDepth) {
 
     int score = 0;
     int move = 0;
-    const TTFlag flag = probe_tt(key, 6, 0, -1000, 1000, &score, &move);
+    Board board;
+    board.init_start_position();
+    const TTFlag flag = probe_tt(&board, key, 6, 0, -1000, 1000, &score, &move);
 
     EXPECT_EQ(flag, TT_NONE);
-    EXPECT_EQ(probe_tt_move(key), 0);
+    EXPECT_EQ(probe_tt_move(&board, key), 0);
 }

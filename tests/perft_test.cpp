@@ -67,7 +67,6 @@ static void run_benchmark() {
 
 int main() {
     init_zobrist();
-    init_all_attacks();
 
     int failed = 0;
     for (const auto& test : PERFT_CASES) {
