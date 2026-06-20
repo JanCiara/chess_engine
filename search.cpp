@@ -97,6 +97,21 @@ static int in_check(const Board* board) {
     return is_square_attacked(king_sq, board->side ^ 1, board);
 }
 
+static bool has_non_pawn_material(const Board* board) {
+    if (board->side == WHITE) {
+        return board->bitboards[N] || board->bitboards[B]
+            || board->bitboards[R] || board->bitboards[Q];
+    }
+    return board->bitboards[n] || board->bitboards[b]
+        || board->bitboards[r] || board->bitboards[q];
+}
+
+static void apply_null_move(Board* board) {
+    board->side ^= 1;
+    board->en_passant = -1;
+    board->hash_key = compute_hash(board);
+}
+
 static bool is_repetition(U64 key) {
     // rep_stack already contains the current position (pushed by the parent
     // before recursing), so a single additional match means the position has
@@ -319,6 +334,8 @@ static int quiescence(int alpha, int beta, int ply, Board* board) {
     return alpha;
 }
 
+#define NULL_MOVE_R 3
+
 static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
     if (ply > search_seldepth) {
         search_seldepth = ply;
@@ -334,7 +351,7 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
         return draw;
     }
 
-    if (depth == 0) {
+    if (depth <= 0) {
         return quiescence(alpha, beta, ply, board);
     }
 
@@ -349,6 +366,23 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
     }
     if (tt_flag == TT_BETA) {
         return tt_score;
+    }
+
+    // Null move pruning: if passing the turn still fails high, cut off.
+    int null_depth = depth - 1 - NULL_MOVE_R;
+    if (null_depth >= 1 && !in_check(board) && has_non_pawn_material(board)) {
+        Board copy = *board;
+        apply_null_move(board);
+        rep_stack[rep_ply++] = board->hash_key;
+
+        int null_score = -negamax(-beta, -beta + 1, null_depth, ply + 1, board);
+
+        rep_ply--;
+        *board = copy;
+
+        if (null_score >= beta) {
+            return beta;
+        }
     }
 
     int alpha_orig = alpha;
