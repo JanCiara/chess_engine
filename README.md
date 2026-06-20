@@ -1,5 +1,7 @@
 # Chess Engine
 
+[![perft passing](https://img.shields.io/github/actions/workflow/status/JanCiara/chess_engine/ci.yml?branch=main&label=perft+passing)](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml)
+
 A bitboard-based chess engine with UCI protocol support.
 
 **Author:** janek
@@ -36,6 +38,17 @@ cmake --build build --config Release
 The executable is written to `build/chess_engine` (Unix) or `build/Release/chess_engine.exe` (MSVC multi-config).
 
 Release builds use `-O2 -march=native` (GCC/Clang) or `/O2` (MSVC).
+
+### Run tests
+
+```bash
+cmake --build build
+ctest --test-dir build --output-on-failure
+# or directly:
+./build/perft_test
+```
+
+The perft suite checks move generation against known node counts and prints a depth-5 benchmark with **NPS** (nodes per second). Results are published in the [CI workflow summary](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml) on every push.
 
 ## UCI usage
 
@@ -81,6 +94,7 @@ quit
 | `tt.cpp` | Zobrist keys and transposition table |
 | `draw.cpp` | Draw detection helpers |
 | `uci.cpp` | UCI protocol loop |
+| `tests/perft_test.cpp` | Perft regression suite and NPS benchmark |
 
 ## Perft sanity check
 

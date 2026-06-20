@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  perft:
+    name: Perft
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run perft suite
+        run: ./build/perft_test 2>&1 | tee perft.log
+
+      - name: Publish benchmark summary
+        if: always()
+        run: |
+          echo "## Perft benchmark" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^\[PASS\]|^\[FAIL\]|^benchmark|^all perft' perft.log >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if grep -q '^benchmark' perft.log; then
+            nps=$(grep '^benchmark' perft.log | sed -n 's/.*nps=\([0-9]*\).*/\1/p')
+            echo "nps=${nps}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check perft result
+        run: grep -q 'all perft cases passed' perft.log
+
+  perft-windows:
+    name: Perft (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Run perft suite
+        run: .\build\Release\perft_test.exe 2>&1 | Tee-Object -FilePath perft.log
+
+      - name: Check perft result
+        run: |
+          Select-String -Path perft.log -Pattern 'all perft cases passed' -Quiet
+          if (-not $?) { exit 1 }

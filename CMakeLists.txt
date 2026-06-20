@@ -11,26 +11,38 @@ endif()
 
 add_executable(chess_engine
     main.cpp
+    uci.cpp
+    ${ENGINE_CORE_SOURCES}
+)
+
+target_include_directories(chess_engine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Shared engine sources (everything except main/uci entry points)
+set(ENGINE_CORE_SOURCES
     board.cpp
     movegen.cpp
     evaluate.cpp
     search.cpp
     tt.cpp
     draw.cpp
-    uci.cpp
 )
 
-target_include_directories(chess_engine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
 if(MSVC)
-    target_compile_options(chess_engine PRIVATE
-        $<$<CONFIG:Release>:/O2>
-        $<$<CONFIG:RelWithDebInfo>:/O2>
-    )
+    set(ENGINE_RELEASE_FLAGS $<$<CONFIG:Release>:/O2> $<$<CONFIG:RelWithDebInfo>:/O2>)
+    set(ENGINE_DEBUG_FLAGS)
 else()
-    target_compile_options(chess_engine PRIVATE
+    set(ENGINE_RELEASE_FLAGS
         $<$<CONFIG:Release>:-O2 -march=native>
         $<$<CONFIG:RelWithDebInfo>:-O2 -march=native>
-        $<$<CONFIG:Debug>:-g>
     )
+    set(ENGINE_DEBUG_FLAGS $<$<CONFIG:Debug>:-g>)
 endif()
+
+target_compile_options(chess_engine PRIVATE ${ENGINE_RELEASE_FLAGS} ${ENGINE_DEBUG_FLAGS})
+
+add_executable(perft_test tests/perft_test.cpp ${ENGINE_CORE_SOURCES})
+target_include_directories(perft_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(perft_test PRIVATE ${ENGINE_RELEASE_FLAGS} ${ENGINE_DEBUG_FLAGS})
+
+enable_testing()
+add_test(NAME perft COMMAND perft_test)
