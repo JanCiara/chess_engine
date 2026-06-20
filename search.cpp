@@ -143,6 +143,129 @@ static int get_victim_piece(const Board* board, int square) {
     return 0;
 }
 
+static U64 see_attackers_to(int square, const U64 bb[12], U64 occupancy) {
+    return (pawn_attacks[WHITE][square] & bb[p])
+        | (pawn_attacks[BLACK][square] & bb[P])
+        | (knight_attacks[square] & (bb[N] | bb[n]))
+        | (king_attacks[square] & (bb[K] | bb[k]))
+        | (get_bishop_attacks(square, occupancy) & (bb[B] | bb[b] | bb[Q] | bb[q]))
+        | (get_rook_attacks(square, occupancy) & (bb[R] | bb[r] | bb[Q] | bb[q]));
+}
+
+static int see_piece_on(const U64 bb[12], int square) {
+    for (int piece = P; piece <= k; piece++) {
+        if (get_bit(bb[piece], square)) {
+            return piece;
+        }
+    }
+    return 0;
+}
+
+static int see_find_attacker(int square, int side, const U64 bb[12], U64 occupancy, int* attacker_sq) {
+    static const int white_order[] = {P, N, B, R, Q, K};
+    static const int black_order[] = {p, n, b, r, q, k};
+    const int* order = (side == WHITE) ? white_order : black_order;
+
+    U64 attackers = see_attackers_to(square, bb, occupancy);
+    U64 side_pieces = 0;
+    for (int i = 0; i < 6; i++) {
+        side_pieces |= bb[order[i]];
+    }
+    attackers &= side_pieces;
+
+    for (int i = 0; i < 6; i++) {
+        int piece = order[i];
+        U64 piece_bb = bb[piece] & attackers;
+        if (piece_bb) {
+            *attacker_sq = get_LSB(piece_bb);
+            return piece;
+        }
+    }
+    return 0;
+}
+
+static int see(const Board* board, int move) {
+    if (!get_move_capture(move) && !get_move_promoted(move)) {
+        return 0;
+    }
+
+    int from = get_move_source(move);
+    int to = get_move_target(move);
+    int piece = get_move_piece(move);
+    int promo = get_move_promoted(move);
+
+    int captured_sq = to;
+    int captured = get_victim_piece(board, to);
+    if (get_move_enpassant(move)) {
+        captured_sq = (board->side == WHITE) ? to - 8 : to + 8;
+        captured = (board->side == WHITE) ? p : P;
+    }
+
+    if (captured == 0 && !promo) {
+        return 0;
+    }
+
+    U64 bb[12];
+    for (int i = P; i <= k; i++) {
+        bb[i] = board->bitboards[i];
+    }
+    U64 occupancy = board->occupancies[2];
+
+    pop_bit(bb[piece], from);
+    pop_bit(occupancy, from);
+
+    if (captured) {
+        pop_bit(bb[captured], captured_sq);
+        pop_bit(occupancy, captured_sq);
+    }
+
+    int placed = promo ? promo : piece;
+    set_bit(bb[placed], to);
+    set_bit(occupancy, to);
+
+    int gain[32];
+    int depth = 0;
+    gain[0] = piece_values[captured];
+    if (promo) {
+        gain[0] += piece_values[promo] - piece_values[piece];
+    }
+
+    int side = board->side ^ 1;
+
+    while (depth < 31) {
+        int attacker_sq = 0;
+        int attacker = see_find_attacker(to, side, bb, occupancy, &attacker_sq);
+        if (!attacker) {
+            break;
+        }
+
+        depth++;
+        gain[depth] = piece_values[attacker] - gain[depth - 1];
+        if (gain[depth] < -gain[depth - 1]) {
+            gain[depth] = -gain[depth - 1];
+        }
+
+        int victim = see_piece_on(bb, to);
+        if (victim) {
+            pop_bit(bb[victim], to);
+        }
+        pop_bit(bb[attacker], attacker_sq);
+        pop_bit(occupancy, attacker_sq);
+
+        set_bit(bb[attacker], to);
+        set_bit(occupancy, to);
+
+        side ^= 1;
+    }
+
+    while (depth > 0) {
+        gain[depth - 1] = gain[depth - 1] > -gain[depth] ? gain[depth - 1] : -gain[depth];
+        depth--;
+    }
+
+    return gain[0];
+}
+
 static int score_move(int move, const Board* board) {
     if (move == follow_pv_move) {
         return 3000000;
@@ -152,17 +275,15 @@ static int score_move(int move, const Board* board) {
         return 2000000;
     }
 
-    if (get_move_promoted(move)) {
+    if (get_move_promoted(move) && !get_move_capture(move)) {
         return 1000000 + piece_values[get_move_promoted(move)];
     }
 
-    if (!get_move_capture(move)) {
-        return 0;
+    if (get_move_capture(move) || get_move_promoted(move)) {
+        return 1000000 + see(board, move);
     }
 
-    int victim = get_victim_piece(board, get_move_target(move));
-    int attacker = get_move_piece(move);
-    return 10 * piece_values[victim] - piece_values[attacker];
+    return 0;
 }
 
 static void sort_moves(Moves* move_list, const Board* board) {
@@ -306,6 +427,9 @@ static int quiescence(int alpha, int beta, int ply, Board* board) {
         if (!check && !get_move_capture(move) && !get_move_promoted(move)) {
             continue;
         }
+        if (!check && get_move_capture(move) && see(board, move) < 0) {
+            continue;
+        }
 
         Board copy = *board;
         if (!make_move(board, move, 0)) {
@@ -336,6 +460,7 @@ static int quiescence(int alpha, int beta, int ply, Board* board) {
 
 #define NULL_MOVE_R 3
 #define CHECK_EXT 1
+#define ASPIRATION_WINDOW 50
 
 static int compute_lmr(int depth, int moves_searched, int move, int check) {
     if (check) {
@@ -499,11 +624,9 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
     return alpha;
 }
 
-static int search_root(Board* board, int depth) {
+static int search_root(Board* board, int depth, int alpha, int beta) {
     search_seldepth = 0;
 
-    int alpha = -INF;
-    int beta = INF;
     int best_score = -INF;
     int iteration_best_move = 0;
 
@@ -546,6 +669,31 @@ static int search_root(Board* board, int depth) {
     return best_score;
 }
 
+static int search_root_aspiration(Board* board, int depth, int prev_score) {
+    int alpha = -INF;
+    int beta = INF;
+
+    if (depth >= 2
+        && prev_score > -MATE_SCORE + 256
+        && prev_score < MATE_SCORE - 256) {
+        alpha = prev_score - ASPIRATION_WINDOW;
+        beta = prev_score + ASPIRATION_WINDOW;
+    }
+
+    while (true) {
+        int score = search_root(board, depth, alpha, beta);
+        if (score <= alpha) {
+            alpha = -INF;
+            continue;
+        }
+        if (score >= beta) {
+            beta = INF;
+            continue;
+        }
+        return score;
+    }
+}
+
 static bool should_start_next_depth(int current_depth, long long elapsed_ms) {
     if (search_time_limit_ms < 0) {
         return true;
@@ -586,7 +734,7 @@ void search_position(Board* board, const SearchLimits& limits) {
             break;
         }
 
-        last_score = search_root(board, depth);
+        last_score = search_root_aspiration(board, depth, last_score);
 
         if (!stop_search && best_move != 0) {
             follow_pv_move = best_move;
