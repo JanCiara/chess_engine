@@ -336,6 +336,33 @@ static int quiescence(int alpha, int beta, int ply, Board* board) {
 
 #define NULL_MOVE_R 3
 
+static int compute_lmr(int depth, int moves_searched, int move, int check) {
+    if (check) {
+        return 0;
+    }
+    if (moves_searched == 0) {
+        return 0;
+    }
+    if (depth < 3) {
+        return 0;
+    }
+    if (moves_searched < 4) {
+        return 0;
+    }
+    if (get_move_capture(move) || get_move_promoted(move)) {
+        return 0;
+    }
+
+    int r = 1;
+    if (depth >= 6 && moves_searched >= 10) {
+        r = 2;
+    }
+    if (r > depth - 2) {
+        r = depth - 2;
+    }
+    return r;
+}
+
 static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
     if (ply > search_seldepth) {
         search_seldepth = ply;
@@ -391,7 +418,9 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
     generate_moves(board, move_list);
     sort_moves(move_list, board);
 
+    int check = in_check(board);
     int legal_moves = 0;
+    int moves_searched = 0;
     int best_move_store = current_tt_move;
 
     for (int i = 0; i < move_list->count; i++) {
@@ -406,11 +435,33 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
         }
         legal_moves++;
 
-        rep_stack[rep_ply++] = board->hash_key;
-        int score = -negamax(-beta, -alpha, depth - 1, ply + 1, board);
-        rep_ply--;
+        int move = move_list->moves[i];
+        int reduction = compute_lmr(depth, moves_searched, move, check);
+        int search_depth = depth - 1 - reduction;
+        if (search_depth < 1) {
+            search_depth = 1;
+        }
 
+        rep_stack[rep_ply++] = board->hash_key;
+
+        int score;
+        if (reduction > 0) {
+            score = -negamax(-alpha - 1, -alpha, search_depth, ply + 1, board);
+            if (score > alpha) {
+                score = -negamax(-beta, -alpha, depth - 1, ply + 1, board);
+            }
+        } else if (moves_searched == 0) {
+            score = -negamax(-beta, -alpha, depth - 1, ply + 1, board);
+        } else {
+            score = -negamax(-alpha - 1, -alpha, depth - 1, ply + 1, board);
+            if (score > alpha && score < beta) {
+                score = -negamax(-beta, -alpha, depth - 1, ply + 1, board);
+            }
+        }
+
+        rep_ply--;
         *board = copy;
+        moves_searched++;
 
         if (score > alpha) {
             alpha = score;
