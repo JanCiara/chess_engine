@@ -29,13 +29,6 @@ public:
 
     U64 hash_key = 0;
 
-    static constexpr int MAX_REPETITION = 512;
-    U64 repetition_keys[MAX_REPETITION];
-    int repetition_count = 0;
-
-    void record_position();
-    void clear_repetition();
-
     static constexpr char ascii_pieces[12] = {'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k'};
 
     inline static const std::unordered_map<char, int> ascii_to_int = {

@@ -13,22 +13,25 @@ static U64 ep_keys[65];
 
 static TTEntry tt_table[TT_SIZE];
 
-static int score_to_tt(int score, int depth) {
+// Stored scores are relative to the current node (mate distance from here),
+// search scores are relative to the root (mate distance from root). Convert
+// between the two using ply.
+static int score_to_tt(int score, int ply) {
     if (score >= MATE_SCORE - 256) {
-        return score + depth;
+        return score + ply;
     }
     if (score <= -MATE_SCORE + 256) {
-        return score - depth;
+        return score - ply;
     }
     return score;
 }
 
-static int score_from_tt(int score, int depth) {
+static int score_from_tt(int score, int ply) {
     if (score >= MATE_SCORE - 256) {
-        return score - depth;
+        return score - ply;
     }
     if (score <= -MATE_SCORE + 256) {
-        return score + depth;
+        return score + ply;
     }
     return score;
 }
@@ -81,7 +84,7 @@ U64 compute_hash(const Board* board) {
     return hash;
 }
 
-TTFlag probe_tt(U64 key, int depth, int alpha, int beta, int* score, int* move) {
+TTFlag probe_tt(U64 key, int depth, int ply, int alpha, int beta, int* score, int* move) {
     TTEntry* entry = &tt_table[key & TT_MASK];
 
     if (entry->key != key) {
@@ -95,7 +98,7 @@ TTFlag probe_tt(U64 key, int depth, int alpha, int beta, int* score, int* move) 
         return TT_NONE;
     }
 
-    *score = score_from_tt(entry->score, depth);
+    *score = score_from_tt(entry->score, ply);
 
     switch (entry->flag) {
         case TT_EXACT:
@@ -125,12 +128,12 @@ int probe_tt_move(U64 key) {
     return entry->move;
 }
 
-void store_tt(U64 key, int depth, int score, TTFlag flag, int move) {
+void store_tt(U64 key, int depth, int ply, int score, TTFlag flag, int move) {
     TTEntry* entry = &tt_table[key & TT_MASK];
 
     entry->key = key;
     entry->depth = depth;
-    entry->score = score_to_tt(score, depth);
+    entry->score = score_to_tt(score, ply);
     entry->flag = flag;
     entry->move = move;
 }

@@ -19,6 +19,6 @@ struct TTEntry {
 void init_zobrist();
 void clear_tt();
 U64 compute_hash(const Board* board);
-TTFlag probe_tt(U64 key, int depth, int alpha, int beta, int* score, int* move);
+TTFlag probe_tt(U64 key, int depth, int ply, int alpha, int beta, int* score, int* move);
 int probe_tt_move(U64 key);
-void store_tt(U64 key, int depth, int score, TTFlag flag, int move);
+void store_tt(U64 key, int depth, int ply, int score, TTFlag flag, int move);

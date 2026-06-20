@@ -43,20 +43,24 @@ void parse_position(Board* board, std::string command) {
     ss >> token; // "position"
 
     ss >> token; // "startpos" or "fen"
-    
+
     if (token == "startpos") {
         board->parseFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-        ss >> token;
-    } 
-    else if (token == "fen") {
-        std::string fen_part, fen_full = "";
-        for (int i = 0; i < 6; ++i) {
-             ss >> fen_part;
-             fen_full += fen_part + " ";
-        }
-        board->parseFEN(fen_full.c_str());
-        ss >> token;
+        ss >> token; // possibly "moves"
     }
+    else if (token == "fen") {
+        // Collect the FEN fields until "moves" or end of line. Don't assume a
+        // fixed field count: some GUIs omit the halfmove/fullmove counters.
+        std::string fen_full;
+        while (ss >> token && token != "moves") {
+            fen_full += token + " ";
+        }
+        board->parseFEN(fen_full);
+        // token is now "moves" (handled below) or unchanged at end of stream.
+    }
+
+    game_history_reset();
+    game_history_push(board->hash_key);
 
     if (token == "moves") {
         std::string move_str;
@@ -64,6 +68,7 @@ void parse_position(Board* board, std::string command) {
             int move = parse_move(board, move_str);
             if (move != 0) {
                 make_move(board, move, 0);
+                game_history_push(board->hash_key);
             }
         }
     }

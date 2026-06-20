@@ -18,3 +18,8 @@ extern int best_move;
 
 void search_position(Board* board, const SearchLimits& limits);
 void request_stop();
+
+// Game-move history used for repetition detection. Maintained by the UCI layer
+// as moves are actually played (not the internal search tree).
+void game_history_reset();
+void game_history_push(U64 key);

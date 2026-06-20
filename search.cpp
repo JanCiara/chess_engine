@@ -9,7 +9,13 @@ int best_move = 0;
 
 #define INF 50000
 #define MATE_SCORE 49000
-#define MAX_SEARCH_REP (512 + 128)
+#define MAX_GAME_HISTORY 1024
+#define MAX_SEARCH_REP 2048
+
+// Positions actually reached in the played game, used to seed repetition
+// detection at the root.
+static U64 game_history[MAX_GAME_HISTORY];
+static int game_history_len = 0;
 
 static U64 rep_stack[MAX_SEARCH_REP];
 static int rep_ply = 0;
@@ -33,6 +39,16 @@ static long long now_ms() {
 
 void request_stop() {
     stop_search = true;
+}
+
+void game_history_reset() {
+    game_history_len = 0;
+}
+
+void game_history_push(U64 key) {
+    if (game_history_len < MAX_GAME_HISTORY) {
+        game_history[game_history_len++] = key;
+    }
 }
 
 static int allocate_time_ms(const Board* board, const SearchLimits& limits) {
@@ -65,10 +81,11 @@ static int allocate_time_ms(const Board* board, const SearchLimits& limits) {
 }
 
 static void check_time() {
+    nodes++;
     if (search_time_limit_ms < 0) {
         return;
     }
-    if (++nodes % 2048 == 0) {
+    if (nodes % 2048 == 0) {
         if (now_ms() - search_start_ms >= search_time_limit_ms) {
             stop_search = true;
         }
@@ -81,13 +98,15 @@ static int in_check(const Board* board) {
 }
 
 static bool is_repetition(U64 key) {
-    int count = 0;
-    for (int i = 0; i < rep_ply; i++) {
+    // rep_stack already contains the current position (pushed by the parent
+    // before recursing), so a single additional match means the position has
+    // occurred earlier in the line: treat that twofold as a draw in the tree.
+    for (int i = 0; i < rep_ply - 1; i++) {
         if (rep_stack[i] == key) {
-            count++;
+            return true;
         }
     }
-    return count >= 3;
+    return false;
 }
 
 static int draw_score(const Board* board) {
@@ -233,11 +252,12 @@ static void print_search_info(const Board* board, int depth, int score, long lon
 }
 
 static int quiescence(int alpha, int beta, int ply, Board* board) {
-    if (ply + 1 > search_seldepth) {
-        search_seldepth = ply + 1;
+    if (ply > search_seldepth) {
+        search_seldepth = ply;
     }
 
-    check_time();    if (stop_search) {
+    check_time();
+    if (stop_search) {
         return 0;
     }
 
@@ -293,15 +313,15 @@ static int quiescence(int alpha, int beta, int ply, Board* board) {
     }
 
     if (legal_moves == 0 && check) {
-        return -49000;
+        return -MATE_SCORE + ply;
     }
 
     return alpha;
 }
 
 static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
-    if (ply + depth > search_seldepth) {
-        search_seldepth = ply + depth;
+    if (ply > search_seldepth) {
+        search_seldepth = ply;
     }
 
     check_time();
@@ -319,7 +339,7 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
     }
 
     int tt_score = 0;
-    TTFlag tt_flag = probe_tt(board->hash_key, depth, alpha, beta, &tt_score, &current_tt_move);
+    TTFlag tt_flag = probe_tt(board->hash_key, depth, ply, alpha, beta, &tt_score, &current_tt_move);
 
     if (tt_flag == TT_EXACT) {
         return tt_score;
@@ -338,7 +358,6 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
     sort_moves(move_list, board);
 
     int legal_moves = 0;
-    int best_score = -INF;
     int best_move_store = current_tt_move;
 
     for (int i = 0; i < move_list->count; i++) {
@@ -359,16 +378,12 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
 
         *board = copy;
 
-        if (score > best_score) {
-            best_score = score;
-        }
-
         if (score > alpha) {
             alpha = score;
             best_move_store = move_list->moves[i];
 
             if (alpha >= beta) {
-                store_tt(board->hash_key, depth, beta, TT_BETA, best_move_store);
+                store_tt(board->hash_key, depth, ply, beta, TT_BETA, best_move_store);
                 return beta;
             }
         }
@@ -378,7 +393,7 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
         int king_sq = get_LSB(board->bitboards[(board->side == WHITE) ? K : k]);
 
         if (is_square_attacked(king_sq, board->side ^ 1, board)) {
-            return -49000 + depth;
+            return -MATE_SCORE + ply;
         } else {
             return 0;
         }
@@ -389,7 +404,7 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
         flag = TT_ALPHA;
     }
 
-    store_tt(board->hash_key, depth, alpha, flag, best_move_store);
+    store_tt(board->hash_key, depth, ply, alpha, flag, best_move_store);
 
     return alpha;
 }
@@ -463,9 +478,9 @@ void search_position(Board* board, const SearchLimits& limits) {
     search_start_ms = now_ms();
     search_time_limit_ms = allocate_time_ms(board, limits);
 
-    rep_ply = board->repetition_count;
-    for (int i = 0; i < rep_ply; i++) {
-        rep_stack[i] = board->repetition_keys[i];
+    rep_ply = 0;
+    for (int i = 0; i < game_history_len && rep_ply < MAX_SEARCH_REP; i++) {
+        rep_stack[rep_ply++] = game_history[i];
     }
 
     SearchLimits effective = limits;

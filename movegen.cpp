@@ -728,7 +728,6 @@ int make_move(Board *board, int move, int capture_only) {
     }
 
     board->hash_key = compute_hash(board);
-    board->record_position();
     return 1;
 }
 

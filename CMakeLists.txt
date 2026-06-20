@@ -9,14 +9,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Debug, Release, RelWithDebInfo)" FORCE)
 endif()
 
-add_executable(chess_engine
-    main.cpp
-    uci.cpp
-    ${ENGINE_CORE_SOURCES}
-)
-
-target_include_directories(chess_engine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
 # Shared engine sources (everything except main/uci entry points)
 set(ENGINE_CORE_SOURCES
     board.cpp
@@ -38,6 +30,13 @@ else()
     set(ENGINE_DEBUG_FLAGS $<$<CONFIG:Debug>:-g>)
 endif()
 
+add_executable(chess_engine
+    main.cpp
+    uci.cpp
+    ${ENGINE_CORE_SOURCES}
+)
+
+target_include_directories(chess_engine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(chess_engine PRIVATE ${ENGINE_RELEASE_FLAGS} ${ENGINE_DEBUG_FLAGS})
 
 add_executable(perft_test tests/perft_test.cpp ${ENGINE_CORE_SOURCES})
