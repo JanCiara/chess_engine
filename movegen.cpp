@@ -301,7 +301,7 @@ int make_move(Board* board, int move, Undo* undo, int capture_only) {
     undo->castle_rights = board->castle_rights();
     undo->half_move_clock = board->half_move_clock();
     undo->full_move_counter = board->full_move_counter();
-    undo->captured_piece = 0;
+    undo->captured_piece = -1;
     undo->captured_square = 0;
 
     if (enpassant) {
@@ -310,7 +310,9 @@ int make_move(Board* board, int move, Undo* undo, int capture_only) {
     } else if (capture) {
         undo->captured_square = target_square;
         const int victim = board->piece_at(target_square);
-        undo->captured_piece = victim >= 0 ? victim : 0;
+        if (victim >= 0) {
+            undo->captured_piece = victim;
+        }
     }
 
     board->pop_piece_bit(piece, source_square);
@@ -439,7 +441,7 @@ void undo_move(Board* board, const Undo* undo) {
     }
     board->set_piece_bit(piece, source);
 
-    if (undo->captured_piece) {
+    if (undo->captured_piece >= 0) {
         board->set_piece_bit(undo->captured_piece, undo->captured_square);
     }
 
@@ -460,7 +462,6 @@ long long perft_driver(int depth, Board *board) {
     long long nodes = 0;
 
     for (int i = 0; i < move_list->count; i++) {
-        Board copy = *board;
         Undo undo;
         if (!make_move(board, move_list->moves[i], &undo, 0)) {
             continue;
@@ -468,7 +469,7 @@ long long perft_driver(int depth, Board *board) {
 
         nodes += perft_driver(depth - 1, board);
 
-        *board = copy;
+        undo_move(board, &undo);
     }
 
     return nodes;

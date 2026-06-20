@@ -454,8 +454,10 @@ def build_cutechess_command(
         *ref_args,
         "-each",
         f"tc={tc}",
-        "timemargin=200",
+        "timemargin=500",
         "restart=on",
+        "-wait",
+        "100",
         "-concurrency",
         str(concurrency),
         "-rounds",
@@ -493,7 +495,7 @@ def build_cutechess_command(
 
 
 def parse_args() -> argparse.Namespace:
-    cpus = os.cpu_count() or 1
+    default_concurrency = max(1, min(4, (os.cpu_count() or 1) // 4))
     parser = argparse.ArgumentParser(
         description="Run cutechess-cli Elo/SPRT tests for chess_engine.",
     )
@@ -521,8 +523,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--concurrency",
         type=int,
-        default=cpus,
-        help=f"Parallel games (default: {cpus}).",
+        default=default_concurrency,
+        help=f"Parallel games (default: {default_concurrency}; keep low to avoid UCI stalls).",
     )
     parser.add_argument(
         "--no-sprt",

@@ -48,11 +48,20 @@ int Search::allocate_time_ms(const Board* board, const SearchLimits& limits) con
     if (limits.movestogo > 0) {
         allocation = time / limits.movestogo + inc * 3 / 4;
     } else {
-        allocation = time / 20 + inc;
+        allocation = time / 25 + inc * 3 / 4;
     }
 
+    if (allocation < 50) {
+        allocation = 50;
+    }
     if (allocation > time / 2) {
         allocation = time / 2;
+    }
+    if (allocation > time - 100) {
+        allocation = time - 100;
+    }
+    if (allocation < 50) {
+        allocation = 50;
     }
 
     return allocation;
@@ -63,7 +72,7 @@ void Search::check_time() {
     if (search_time_limit_ms_ < 0) {
         return;
     }
-    if (nodes_ % 2048 == 0) {
+    if (nodes_ % 512 == 0) {
         if (now_ms() - search_start_ms_ >= search_time_limit_ms_) {
             stop_search_ = true;
         }
@@ -672,6 +681,9 @@ void Search::search_position(Board* board, const SearchLimits& limits) {
     nodes_ = 0;
     search_start_ms_ = now_ms();
     search_time_limit_ms_ = allocate_time_ms(board, limits);
+    if (search_time_limit_ms_ < 0 && !limits.infinite && limits.depth == 0) {
+        search_time_limit_ms_ = 1000;
+    }
 
     rep_ply_ = 0;
     for (int i = 0; i < game_history_len_ && rep_ply_ < MAX_SEARCH_REP; i++) {

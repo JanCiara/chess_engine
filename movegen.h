@@ -22,7 +22,7 @@ int is_square_attacked(int square, int side, const Board* board);
 
 struct Undo {
     int move = 0;
-    int captured_piece = 0;
+    int captured_piece = -1;
     int captured_square = 0;
     int en_passant = -1;
     int castle_rights = 15;

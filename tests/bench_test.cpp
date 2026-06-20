@@ -6,7 +6,7 @@
 #include "movegen.h"
 
 // Total nodes at depth 8 over the fixed bench set (search regression baseline).
-static constexpr long long EXPECTED_BENCH_NODES = 33096264LL;
+static constexpr long long EXPECTED_BENCH_NODES = 29079327LL;
 
 int main() {
     init_zobrist();
