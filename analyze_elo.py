@@ -130,12 +130,44 @@ def format_report(stats: dict, reference_elo: int = REFERENCE_ELO) -> str:
         f"  Score:         {stats['wins']}-{stats['losses']}-{stats['draws']}"
         f" ({stats['score_pct']:.1f}%)",
     ]
-    if stats["games"] > 0 and math.isfinite(stats["elo_diff"]):
+    n = stats["games"]
+    if n == 0:
+        lines.append("  No valid games to estimate Elo.")
+        return "\n".join(lines)
+
+    if math.isfinite(stats["elo_diff"]):
         lines.append(
             f"  vs Sunfish {reference_elo}: {stats['elo_diff']:+.0f} +/- {stats['elo_err']:.0f} Elo"
         )
         lines.append(
             f"  Estimated rating: ~{stats['rating']:.0f} +/- {stats['elo_err']:.0f}"
+        )
+        return "\n".join(lines)
+
+    # Perfect 0% or 100% — report Wilson 95% bound (sample usually too small).
+    wins = stats["wins"] + 0.5 * stats["draws"]
+    p = wins / n
+    z = 1.96
+    denom = 1 + z * z / n
+    margin = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    center = (p + z * z / (2 * n)) / denom
+    if p >= 0.5:
+        bound = max(0.01, center - margin)
+        elo_bound = -400 * math.log10(1 / bound - 1)
+        lines.append(
+            f"  vs Sunfish {reference_elo}: >{elo_bound:+.0f} Elo (95% lower bound, n={n})"
+        )
+        lines.append(
+            f"  Estimated rating: >{reference_elo + elo_bound:.0f} (n={n}, not statistically reliable)"
+        )
+    else:
+        bound = min(0.99, center + margin)
+        elo_bound = -400 * math.log10(1 / bound - 1)
+        lines.append(
+            f"  vs Sunfish {reference_elo}: <{elo_bound:+.0f} Elo (95% upper bound, n={n})"
+        )
+        lines.append(
+            f"  Estimated rating: <{reference_elo + elo_bound:.0f} (n={n}, not statistically reliable)"
         )
     return "\n".join(lines)
 

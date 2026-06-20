@@ -460,6 +460,7 @@ long long perft_driver(int depth, Board *board) {
     long long nodes = 0;
 
     for (int i = 0; i < move_list->count; i++) {
+        Board copy = *board;
         Undo undo;
         if (!make_move(board, move_list->moves[i], &undo, 0)) {
             continue;
@@ -467,7 +468,7 @@ long long perft_driver(int depth, Board *board) {
 
         nodes += perft_driver(depth - 1, board);
 
-        undo_move(board, &undo);
+        *board = copy;
     }
 
     return nodes;

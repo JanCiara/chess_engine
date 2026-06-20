@@ -12,16 +12,23 @@ Prerequisites:
     Build the engine first (Release recommended):
         cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release
 
-    After the match finishes, convert testing/results.pgn into Elo estimates:
+    After the match finishes, filter out invalid games and estimate Elo:
 
-    Ordo (recommended):
+        python analyze_elo.py                  # reads testing/results.pgn
+        python run_elo_tests.py --analyze-only   # same analysis
+
+    Writes testing/results_valid.pgn (mates, adjudication, no stalls/disconnects).
+    For larger samples, also run Ordo on the filtered PGN:
         git clone https://github.com/michaeladams/ordo.git
         cd ordo && make
+        ./ordo -a 60 -p testing/results_valid.pgn -c
+
+    Ordo on the full PGN (includes invalid games — not recommended):
         ./ordo -a 60 -p testing/results.pgn -c
 
     BayesElo (Windows GUI or command line):
         Download from https://www.remi-coulom.fr/BayesElo/
-        Open testing/results.pgn, set the reference engine rating (Sunfish ~2000,
+        Open testing/results_valid.pgn, set the reference engine rating (Sunfish ~2000,
         TSCP ~1600 on fast time controls), then run "Rating" -> "Rate results".
 
     cutechess-cli also prints live Elo / LOS / SPRT status during the match.
@@ -566,11 +573,41 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print the cutechess-cli command without running it.",
     )
+    parser.add_argument(
+        "--analyze-only",
+        action="store_true",
+        help="Analyze testing/results.pgn (valid games only) and exit.",
+    )
+    parser.add_argument(
+        "--reference-elo",
+        type=int,
+        default=2000,
+        help="Sunfish reference rating for analyze-only mode (default: 2000).",
+    )
     return parser.parse_args()
+
+
+def run_post_match_analysis(reference_elo: int = 2000) -> None:
+    from analyze_elo import analyze_pgn, format_report, write_filtered_pgn
+
+    if not RESULTS_PGN.is_file():
+        warn(f"No PGN at {RESULTS_PGN}; skipping analysis.")
+        return
+
+    stats = analyze_pgn(RESULTS_PGN, reference_elo)
+    valid_pgn = RESULTS_PGN.with_name("results_valid.pgn")
+    count = write_filtered_pgn(RESULTS_PGN, valid_pgn)
+    log("")
+    log(format_report(stats, reference_elo))
+    log(f"  Filtered PGN:  {valid_pgn} ({count} games)")
 
 
 def main() -> None:
     args = parse_args()
+    if args.analyze_only:
+        run_post_match_analysis(args.reference_elo)
+        return
+
     ensure_dirs()
 
     log("=== chess_engine Elo / SPRT test runner ===")
@@ -657,7 +694,7 @@ def main() -> None:
 
     if RESULTS_PGN.is_file():
         log(f"Results saved to {RESULTS_PGN}")
-        log("Run Ordo or BayesElo on that PGN for final rating estimates (see script header).")
+        run_post_match_analysis(args.reference_elo)
     else:
         warn(f"Expected PGN not found at {RESULTS_PGN}")
 
