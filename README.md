@@ -1,6 +1,6 @@
 # Chess Engine
 
-[![perft passing](https://img.shields.io/github/actions/workflow/status/JanCiara/chess_engine/ci.yml?branch=main&label=perft+passing)](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/JanCiara/chess_engine/ci.yml?branch=main&label=CI)](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml)
 
 A bitboard-based chess engine with UCI protocol support.
 
@@ -46,9 +46,17 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 # or directly:
 ./build/perft_test
+./build/bench_test
+./build/wac_test
 ```
 
-The perft suite checks move generation against known node counts and prints a depth-5 benchmark with **NPS** (nodes per second). Results are published in the [CI workflow summary](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml) on every push.
+| Test | What it checks |
+|------|----------------|
+| `perft_test` | Move generation node counts + perft NPS benchmark |
+| `bench_test` | Fixed-position search bench: repeatable total nodes at depth 8 |
+| `wac_test` | WAC EPD tactical suite: % of positions with correct best move (depth 10) |
+
+Results are published in the [CI workflow summary](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml) on every push.
 
 ## UCI usage
 
@@ -68,6 +76,8 @@ go depth 8
 position startpos moves e2e4 e7e5
 go wtime 60000 btime 60000 winc 1000 binc 1000
 go perft 5
+bench
+bench 8
 quit
 ```
 
@@ -83,6 +93,24 @@ quit
 | `infinite` | Search until `stop` |
 | `perft N` | Perft division to depth N |
 
+### `bench`
+
+Stockfish-style search benchmark over a fixed set of 48 positions. Runs a quiet depth-limited search on each position and prints total nodes and NPS — useful for regression testing and comparing builds:
+
+```
+bench      # default depth 8
+bench 10   # custom depth
+```
+
+Example output:
+
+```
+===========================
+Total time (ms) : 36557
+Nodes searched  : 33096264
+Nodes/second    : 905333
+```
+
 ## Project layout
 
 | File | Role |
@@ -93,8 +121,13 @@ quit
 | `search.cpp` | Search, iterative deepening |
 | `tt.cpp` | Zobrist keys and transposition table |
 | `draw.cpp` | Draw detection helpers |
+| `bench.cpp` | Fixed-position search benchmark |
+| `epd.cpp` | EPD line parser (`bm`, `id`) |
 | `uci.cpp` | UCI protocol loop |
 | `tests/perft_test.cpp` | Perft regression suite and NPS benchmark |
+| `tests/bench_test.cpp` | Search bench regression (node count) |
+| `tests/wac_test.cpp` | WAC tactical EPD suite |
+| `tests/wac.epd` | 30 WAC positions (UCI `bm` moves) |
 
 ## Perft sanity check
 
@@ -104,3 +137,13 @@ From the starting position, depth 3 should report **8902** nodes:
 position startpos
 go perft 3
 ```
+
+## WAC tactical suite
+
+The engine loads `tests/wac.epd` (30 positions from the classic Win At Chess set) and reports the solve rate at depth 10, e.g.:
+
+```
+wac depth=10 solved=23/30 (76%)
+```
+
+Run via `ctest` or `./build/wac_test`.

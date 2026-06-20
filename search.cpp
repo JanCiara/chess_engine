@@ -41,6 +41,10 @@ void request_stop() {
     stop_search = true;
 }
 
+long long get_search_nodes() {
+    return nodes;
+}
+
 void game_history_reset() {
     game_history_len = 0;
 }
@@ -741,7 +745,9 @@ void search_position(Board* board, const SearchLimits& limits) {
         }
 
         long long elapsed = now_ms() - search_start_ms;
-        print_search_info(board, depth, last_score, elapsed);
+        if (!limits.quiet) {
+            print_search_info(board, depth, last_score, elapsed);
+        }
 
         if (stop_search) {
             break;
@@ -758,6 +764,10 @@ void search_position(Board* board, const SearchLimits& limits) {
         if (search_time_limit_ms >= 0 && !should_start_next_depth(depth, elapsed)) {
             break;
         }
+    }
+
+    if (limits.quiet) {
+        return;
     }
 
     if (best_move == 0) {

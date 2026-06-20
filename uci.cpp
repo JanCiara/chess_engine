@@ -3,12 +3,28 @@
 #include <sstream>
 #include <vector>
 #include "uci.h"
+#include "bench.h"
 #include "movegen.h"
 #include "search.h"
 #include "tt.h"
 
-// Helper: Convert string move (e.g., "e2e4") to internal int move
-int parse_move(Board* board, std::string move_string) {
+std::string move_to_uci(int move) {
+    std::string uci = Board::int_to_sq(get_move_source(move))
+                    + Board::int_to_sq(get_move_target(move));
+
+    int promo = get_move_promoted(move);
+    if (promo) {
+        char c = 'q';
+        if (promo == R || promo == r) c = 'r';
+        else if (promo == B || promo == b) c = 'b';
+        else if (promo == N || promo == n) c = 'n';
+        uci += c;
+    }
+
+    return uci;
+}
+
+int parse_uci_move(Board* board, const std::string& move_string) {
     Moves move_list[1];
     generate_moves(board, move_list);
 
@@ -65,7 +81,7 @@ void parse_position(Board* board, std::string command) {
     if (token == "moves") {
         std::string move_str;
         while (ss >> move_str) {
-            int move = parse_move(board, move_str);
+            int move = parse_uci_move(board, move_str);
             if (move != 0) {
                 make_move(board, move, 0);
                 game_history_push(board->hash_key);
@@ -143,6 +159,11 @@ void uci_loop() {
         }
         else if (token == "stop") {
             request_stop();
+        }
+        else if (token == "bench") {
+            int depth = BENCH_DEFAULT_DEPTH;
+            ss >> depth;
+            run_bench(depth, false);
         }
         else if (token == "quit") {
             break;

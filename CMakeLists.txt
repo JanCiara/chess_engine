@@ -17,6 +17,8 @@ set(ENGINE_CORE_SOURCES
     search.cpp
     tt.cpp
     draw.cpp
+    bench.cpp
+    epd.cpp
 )
 
 if(MSVC)
@@ -43,5 +45,21 @@ add_executable(perft_test tests/perft_test.cpp ${ENGINE_CORE_SOURCES})
 target_include_directories(perft_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(perft_test PRIVATE ${ENGINE_RELEASE_FLAGS} ${ENGINE_DEBUG_FLAGS})
 
+add_executable(bench_test tests/bench_test.cpp ${ENGINE_CORE_SOURCES})
+target_include_directories(bench_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(bench_test PRIVATE ${ENGINE_RELEASE_FLAGS} ${ENGINE_DEBUG_FLAGS})
+
+add_executable(wac_test tests/wac_test.cpp uci.cpp ${ENGINE_CORE_SOURCES})
+target_include_directories(wac_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(wac_test PRIVATE ${ENGINE_RELEASE_FLAGS} ${ENGINE_DEBUG_FLAGS})
+target_compile_definitions(wac_test PRIVATE WAC_EPD_PATH="${CMAKE_SOURCE_DIR}/tests/wac.epd")
+
+add_executable(eval_test tests/eval_test.cpp ${ENGINE_CORE_SOURCES})
+target_include_directories(eval_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(eval_test PRIVATE ${ENGINE_RELEASE_FLAGS} ${ENGINE_DEBUG_FLAGS})
+
 enable_testing()
 add_test(NAME perft COMMAND perft_test)
+add_test(NAME bench COMMAND bench_test)
+add_test(NAME wac COMMAND wac_test)
+add_test(NAME eval COMMAND eval_test)

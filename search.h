@@ -12,12 +12,14 @@ struct SearchLimits {
     int binc = 0;
     int movestogo = 0;
     bool infinite = false;
+    bool quiet = false;
 };
 
 extern int best_move;
 
 void search_position(Board* board, const SearchLimits& limits);
 void request_stop();
+long long get_search_nodes();
 
 // Game-move history used for repetition detection. Maintained by the UCI layer
 // as moves are actually played (not the internal search tree).

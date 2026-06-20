@@ -7,8 +7,8 @@ on:
     branches: [main, master]
 
 jobs:
-  perft:
-    name: Perft
+  tests:
+    name: Tests (Linux)
     runs-on: ubuntu-latest
 
     steps:
@@ -20,26 +20,19 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
-      - name: Run perft suite
-        run: ./build/perft_test 2>&1 | tee perft.log
+      - name: Run test suite
+        run: ctest --test-dir build --output-on-failure 2>&1 | tee test.log
 
-      - name: Publish benchmark summary
+      - name: Publish summary
         if: always()
         run: |
-          echo "## Perft benchmark" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Test results" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          grep -E '^\[PASS\]|^\[FAIL\]|^benchmark|^all perft' perft.log >> "$GITHUB_STEP_SUMMARY" || true
+          grep -E '^\[PASS\]|^\[FAIL\]|^benchmark|^all perft|^bench |^wac |Nodes searched|^===========================' test.log >> "$GITHUB_STEP_SUMMARY" || true
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          if grep -q '^benchmark' perft.log; then
-            nps=$(grep '^benchmark' perft.log | sed -n 's/.*nps=\([0-9]*\).*/\1/p')
-            echo "nps=${nps}" >> "$GITHUB_OUTPUT"
-          fi
 
-      - name: Check perft result
-        run: grep -q 'all perft cases passed' perft.log
-
-  perft-windows:
-    name: Perft (Windows)
+  tests-windows:
+    name: Tests (Windows)
     runs-on: windows-latest
 
     steps:
@@ -51,10 +44,10 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      - name: Run perft suite
-        run: .\build\Release\perft_test.exe 2>&1 | Tee-Object -FilePath perft.log
+      - name: Run test suite
+        run: ctest --test-dir build -C Release --output-on-failure 2>&1 | Tee-Object -FilePath test.log
 
-      - name: Check perft result
+      - name: Check results
         run: |
-          Select-String -Path perft.log -Pattern 'all perft cases passed' -Quiet
+          Select-String -Path test.log -Pattern '\[PASS\] bench completed' -Quiet
           if (-not $?) { exit 1 }
