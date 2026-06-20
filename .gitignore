@@ -37,3 +37,7 @@ x86/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Elo / SPRT testing (downloaded tools, engines, books, match output)
+testing/
+*.pgn
