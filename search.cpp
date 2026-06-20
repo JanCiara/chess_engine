@@ -335,6 +335,7 @@ static int quiescence(int alpha, int beta, int ply, Board* board) {
 }
 
 #define NULL_MOVE_R 3
+#define CHECK_EXT 1
 
 static int compute_lmr(int depth, int moves_searched, int move, int check) {
     if (check) {
@@ -378,6 +379,11 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
         return draw;
     }
 
+    int check = in_check(board);
+    if (check) {
+        depth += CHECK_EXT;
+    }
+
     if (depth <= 0) {
         return quiescence(alpha, beta, ply, board);
     }
@@ -397,7 +403,7 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
 
     // Null move pruning: if passing the turn still fails high, cut off.
     int null_depth = depth - 1 - NULL_MOVE_R;
-    if (null_depth >= 1 && !in_check(board) && has_non_pawn_material(board)) {
+    if (null_depth >= 1 && !check && has_non_pawn_material(board)) {
         Board copy = *board;
         apply_null_move(board);
         rep_stack[rep_ply++] = board->hash_key;
@@ -418,7 +424,6 @@ static int negamax(int alpha, int beta, int depth, int ply, Board* board) {
     generate_moves(board, move_list);
     sort_moves(move_list, board);
 
-    int check = in_check(board);
     int legal_moves = 0;
     int moves_searched = 0;
     int best_move_store = current_tt_move;
