@@ -12,7 +12,7 @@ const int castling_rights[64] = {
     15, 15, 15, 15, 15, 15, 15, 15,
     15, 15, 15, 15, 15, 15, 15, 15,
     15, 15, 15, 15, 15, 15, 15, 15,
-     7, 15, 15, 15,  3, 15, 15, 11
+    7, 15, 15, 15, 3, 15, 15, 11
 };
 
 U64 bishop_attacks[64][512];
@@ -591,6 +591,7 @@ void generate_moves(const Board *board, Moves *move_list) {
         }
     }
 }
+
 // Returns 1 if move is legal, 0 if illegal (king left in check)
 int make_move(Board *board, int move, int capture_only) {
     // 1. ALL MOVES vs CAPTURES ONLY
@@ -625,9 +626,11 @@ int make_move(Board *board, int move, int capture_only) {
         int start_piece, end_piece;
 
         if (board->side == WHITE) {
-            start_piece = p; end_piece = k;
+            start_piece = p;
+            end_piece = k;
         } else {
-            start_piece = P; end_piece = K;
+            start_piece = P;
+            end_piece = K;
         }
 
         for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++) {
@@ -701,7 +704,7 @@ int make_move(Board *board, int move, int capture_only) {
     // 13. CHANGE SIDE
     board->side ^= 1;
 
-    // 14. LEGALITY CHECK (The most important part!)
+    // 14. LEGALITY CHECK
 
     int side_moved = board->side ^ 1;
 
@@ -762,8 +765,8 @@ void perft_test(int depth, Board *board) {
         *board = copy;
 
         std::cout << "   " << Board::int_to_sq(get_move_source(move_list->moves[i]))
-                  << Board::int_to_sq(get_move_target(move_list->moves[i]))
-                  << ": " << cumulative_nodes << "\n";
+                << Board::int_to_sq(get_move_target(move_list->moves[i]))
+                << ": " << cumulative_nodes << "\n";
     }
 
     long long end = clock();

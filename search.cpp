@@ -3,7 +3,7 @@
 
 int best_move = 0;
 
-#define INFINITY 50000
+#define INF 50000
 
 static int negamax(int alpha, int beta, int depth, Board* board) {
     if (depth == 0) {
@@ -14,7 +14,7 @@ static int negamax(int alpha, int beta, int depth, Board* board) {
     generate_moves(board, move_list);
 
     int legal_moves = 0;
-    int best_score = -INFINITY;
+    int best_score = -INF;
 
     for (int i = 0; i < move_list->count; i++) {
         Board copy = *board;
@@ -55,8 +55,8 @@ static int negamax(int alpha, int beta, int depth, Board* board) {
 }
 
 void search_position(Board* board, int depth) {
-    int alpha = -INFINITY;
-    int beta = INFINITY;
+    int alpha = -INF;
+    int beta = INF;
     
     best_move = 0;
 
@@ -80,6 +80,11 @@ void search_position(Board* board, int depth) {
             alpha = score;
             best_move = move_list->moves[i];
         }
+    }
+
+    if (best_move == 0) {
+        std::cout << "bestmove (none)" << std::endl;
+        return;
     }
 
     std::cout << "bestmove "

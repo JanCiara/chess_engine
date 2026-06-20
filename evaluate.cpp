@@ -49,6 +49,18 @@ const int rook_score[64] = {
      0,   0,   0,   0,   0,   0,   0,   0
 };
 
+// Queens: Slight preference for central control, avoid early edge development
+const int queen_score[64] = {
+   -20, -10, -10,  -5,  -5, -10, -10, -20,
+   -10,   0,   0,   0,   0,   0,   0, -10,
+   -10,   0,   5,   5,   5,   5,   0, -10,
+    -5,   0,   5,   5,   5,   5,   0,  -5,
+     0,   0,   5,   5,   5,   5,   0,  -5,
+   -10,   5,   5,   5,   5,   5,   0, -10,
+   -10,   0,   5,   0,   0,   0,   0, -10,
+   -20, -10, -10,  -5,  -5, -10, -10, -20
+};
+
 // King: Encourage hiding in castle (simplified)
 const int king_score[64] = {
     20,  30,  10,   0,   0,  10,  30,  20,
@@ -115,7 +127,7 @@ int evaluate(Board* board) {
     while (bitboard) {
         square = get_LSB(bitboard);
         score += Q_val;
-        score += bishop_score[square];
+        score += queen_score[square];
         pop_bit(bitboard, square);
     }
 
@@ -171,7 +183,7 @@ int evaluate(Board* board) {
     while (bitboard) {
         square = get_LSB(bitboard);
         score -= Q_val;
-        score -= bishop_score[MIRROR_SCORE(square)];
+        score -= queen_score[MIRROR_SCORE(square)];
         pop_bit(bitboard, square);
     }
 

@@ -1,6 +1,7 @@
 #include "board.h"
 #include <iostream>
 #include <cstring>
+#include <sstream>
 
 #include "movegen.h"
 
@@ -163,62 +164,31 @@ void Board::parseFEN(const std::string &fen) {
         }
     }
 
-    auto cur_idx = space_idx + 1;
-    const char turn = fen[cur_idx];
-    side = turn == 'w' ? WHITE : BLACK;
-    cur_idx += 2;
+    std::stringstream ss(fen.substr(space_idx + 1));
+    std::string turn_tok, castle_tok, en_pas_tok;
 
-    while (fen[cur_idx] != ' ') {
-        switch (fen[cur_idx]) {
-            case '-':
-                castle = 0;
-                break;
-            case 'K':
-                castle |= WK;
-                break;
-            case 'Q':
-                castle |= WQ;
-                break;
-            case 'k':
-                castle |= BK;
-                break;
-            case 'q':
-                castle |= BQ;
-                break;
-            default:
-                break;
+    ss >> turn_tok;
+    side = turn_tok == "w" ? WHITE : BLACK;
+
+    castle = 0;
+    ss >> castle_tok;
+    for (const char c : castle_tok) {
+        switch (c) {
+            case 'K': castle |= WK; break;
+            case 'Q': castle |= WQ; break;
+            case 'k': castle |= BK; break;
+            case 'q': castle |= BQ; break;
+            default: break;
         }
-        cur_idx++;
-    }
-    cur_idx++;
-
-    std::string en_pas;
-    if (fen[cur_idx] == '-') {
-        en_pas = '-';
-        en_passant = -1;
-        cur_idx += 2;
-    } else {
-        en_pas = fen.substr(cur_idx, 2);
-        en_passant = sq_to_int(en_pas);
-        cur_idx++;
     }
 
+    ss >> en_pas_tok;
+    en_passant = (en_pas_tok == "-") ? -1 : sq_to_int(en_pas_tok);
 
-    if (fen[cur_idx + 1] == ' ') {
-        half_move_clock = fen[cur_idx] - '0';
-        cur_idx += 2;
-    } else {
-        const std::string tmp = fen.substr(cur_idx, 2);
-        half_move_clock = (tmp[0] - '0') * 10 + tmp[1] - '0';
-        cur_idx += 3;
-    }
-
-    if (cur_idx + 1 < fen.size()) {
-        const std::string tmp = fen.substr(cur_idx, 2);
-        full_move_counter = ((tmp[0] - '0') * 10) + tmp[1] - '0';
-    } else {
-        full_move_counter = fen[cur_idx] - '0';
-    }
+    half_move_clock = 0;
+    full_move_counter = 1;
+    ss >> half_move_clock;
+    ss >> full_move_counter;
 
     update_occupancies();
 }
