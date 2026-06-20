@@ -1,12 +1,21 @@
 #include <iostream>
-#include <string>
 #include <sstream>
-#include <vector>
+#include <string>
+#include <thread>
 #include "uci.h"
 #include "bench.h"
 #include "movegen.h"
 #include "search.h"
 #include "tt.h"
+
+static std::thread search_thread;
+
+static void stop_and_join_search(Search& search) {
+    search.request_stop();
+    if (search_thread.joinable()) {
+        search_thread.join();
+    }
+}
 
 int parse_uci_move(Board* board, const std::string& move_string) {
     Moves move_list[1];
@@ -49,14 +58,11 @@ void parse_position(Board* board, Search* search, std::string command) {
         ss >> token; // possibly "moves"
     }
     else if (token == "fen") {
-        // Collect the FEN fields until "moves" or end of line. Don't assume a
-        // fixed field count: some GUIs omit the halfmove/fullmove counters.
         std::string fen_full;
         while (ss >> token && token != "moves") {
             fen_full += token + " ";
         }
         board->parseFEN(fen_full);
-        // token is now "moves" (handled below) or unchanged at end of stream.
     }
 
     search->game_history_reset();
@@ -106,12 +112,18 @@ void parse_go(Board* board, Search* search, std::string command) {
     }
 
     if (perft_depth > 0) {
+        stop_and_join_search(*search);
         long long total = uci_perft(board, perft_depth);
         std::cout << total << std::endl;
         return;
     }
 
-    search->search_position(board, limits);
+    stop_and_join_search(*search);
+    search->request_stop();
+
+    search_thread = std::thread([board, search, limits]() {
+        search->search_position(board, limits);
+    });
 }
 
 void uci_loop() {
@@ -131,12 +143,16 @@ void uci_loop() {
             std::cout << "uciok" << std::endl;
         }
         else if (token == "isready") {
+            stop_and_join_search(search);
+            search.request_stop();
             std::cout << "readyok" << std::endl;
         }
         else if (token == "position") {
+            stop_and_join_search(search);
             parse_position(&board, &search, line);
         }
         else if (token == "ucinewgame") {
+            stop_and_join_search(search);
             clear_tt();
             parse_position(&board, &search, "position startpos");
         }
@@ -147,11 +163,13 @@ void uci_loop() {
             search.request_stop();
         }
         else if (token == "bench") {
+            stop_and_join_search(search);
             int depth = BENCH_DEFAULT_DEPTH;
             ss >> depth;
             run_bench(depth, false);
         }
         else if (token == "quit") {
+            stop_and_join_search(search);
             break;
         }
     }

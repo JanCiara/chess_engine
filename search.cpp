@@ -73,7 +73,7 @@ void Search::check_time() {
         return;
     }
     if (nodes_ % 512 == 0) {
-        if (now_ms() - search_start_ms_ >= search_time_limit_ms_) {
+        if (now_ms() - search_start_ms_ >= search_time_limit_ms_ * 9 / 10) {
             stop_search_ = true;
         }
     }

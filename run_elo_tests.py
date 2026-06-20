@@ -396,11 +396,7 @@ def resolve_reference_engine(reference: str, insecure: bool) -> tuple[list[str],
         )
 
     if sys.platform == "win32":
-        try:
-            return resolve_reference_engine("sunfish", insecure)
-        except SystemExit:
-            warn("Sunfish setup failed; falling back to TSCP.")
-            return resolve_reference_engine("tscp", insecure)
+        return resolve_reference_engine("tscp", insecure)
     return resolve_reference_engine("sunfish", insecure)
 
 
@@ -454,7 +450,7 @@ def build_cutechess_command(
         *ref_args,
         "-each",
         f"tc={tc}",
-        "timemargin=500",
+        "timemargin=1000",
         "restart=on",
         "-wait",
         "100",
@@ -495,7 +491,7 @@ def build_cutechess_command(
 
 
 def parse_args() -> argparse.Namespace:
-    default_concurrency = max(1, min(4, (os.cpu_count() or 1) // 4))
+    default_concurrency = 1
     parser = argparse.ArgumentParser(
         description="Run cutechess-cli Elo/SPRT tests for chess_engine.",
     )
