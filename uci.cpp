@@ -4,6 +4,8 @@
 #include <vector>
 #include "uci.h"
 #include "movegen.h"
+#include "search.h"
+#include "tt.h"
 
 // Helper: Convert string move (e.g., "e2e4") to internal int move
 int parse_move(Board* board, std::string move_string) {
@@ -68,7 +70,8 @@ void parse_position(Board* board, std::string command) {
 }
 
 void parse_go(Board* board, std::string command) {
-    int depth = 4;
+    SearchLimits limits;
+    int perft_depth = 0;
 
     std::stringstream ss(command);
     std::string token;
@@ -76,11 +79,33 @@ void parse_go(Board* board, std::string command) {
 
     while (ss >> token) {
         if (token == "depth") {
-            ss >> depth;
+            ss >> limits.depth;
+        } else if (token == "movetime") {
+            ss >> limits.movetime;
+        } else if (token == "wtime") {
+            ss >> limits.wtime;
+        } else if (token == "btime") {
+            ss >> limits.btime;
+        } else if (token == "winc") {
+            ss >> limits.winc;
+        } else if (token == "binc") {
+            ss >> limits.binc;
+        } else if (token == "movestogo") {
+            ss >> limits.movestogo;
+        } else if (token == "infinite") {
+            limits.infinite = true;
+        } else if (token == "perft") {
+            ss >> perft_depth;
         }
     }
 
-    search_position(board, depth);
+    if (perft_depth > 0) {
+        long long total = uci_perft(board, perft_depth);
+        std::cout << total << std::endl;
+        return;
+    }
+
+    search_position(board, limits);
 }
 
 void uci_loop() {
@@ -94,8 +119,8 @@ void uci_loop() {
         ss >> token;
 
         if (token == "uci") {
-            std::cout << "id name MyEngine1" << std::endl;
-            std::cout << "id author You" << std::endl;
+            std::cout << "id name " << ENGINE_NAME << std::endl;
+            std::cout << "id author " << ENGINE_AUTHOR << std::endl;
             std::cout << "uciok" << std::endl;
         }
         else if (token == "isready") {
@@ -105,10 +130,14 @@ void uci_loop() {
             parse_position(&board, line);
         }
         else if (token == "ucinewgame") {
+            clear_tt();
             parse_position(&board, "position startpos");
         }
         else if (token == "go") {
             parse_go(&board, line);
+        }
+        else if (token == "stop") {
+            request_stop();
         }
         else if (token == "quit") {
             break;

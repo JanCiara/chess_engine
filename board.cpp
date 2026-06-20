@@ -4,10 +4,24 @@
 #include <sstream>
 
 #include "movegen.h"
+#include "tt.h"
 
 Board::Board() {
     init_start_position();
     update_occupancies();
+    hash_key = compute_hash(this);
+    clear_repetition();
+    record_position();
+}
+
+void Board::record_position() {
+    if (repetition_count < MAX_REPETITION) {
+        repetition_keys[repetition_count++] = hash_key;
+    }
+}
+
+void Board::clear_repetition() {
+    repetition_count = 0;
 }
 
 int Board::sq_to_int(const std::string &square) {
@@ -191,4 +205,7 @@ void Board::parseFEN(const std::string &fen) {
     ss >> full_move_counter;
 
     update_occupancies();
+    hash_key = compute_hash(this);
+    clear_repetition();
+    record_position();
 }

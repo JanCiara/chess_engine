@@ -1,0 +1,39 @@
+# Build outputs
+build/
+out/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Binaries
+*.exe
+*.out
+*.app
+*.dll
+*.so
+*.dylib
+*.obj
+*.o
+*.a
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# IDE
+.idea/
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+x64/
+x86/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

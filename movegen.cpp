@@ -1,4 +1,5 @@
 #include "movegen.h"
+#include "tt.h"
 
 #include <ctime>
 #include <iostream>
@@ -701,6 +702,16 @@ int make_move(Board *board, int move, int capture_only) {
     // 12. UPDATE OCCUPANCIES
     board->update_occupancies();
 
+    if (capture || piece == P || piece == p || promoted_piece) {
+        board->half_move_clock = 0;
+    } else {
+        board->half_move_clock++;
+    }
+
+    if (board->side == BLACK) {
+        board->full_move_counter++;
+    }
+
     // 13. CHANGE SIDE
     board->side ^= 1;
 
@@ -716,6 +727,8 @@ int make_move(Board *board, int move, int capture_only) {
         return 0;
     }
 
+    board->hash_key = compute_hash(board);
+    board->record_position();
     return 1;
 }
 
@@ -745,32 +758,33 @@ long long perft_driver(int depth, Board *board) {
     return nodes;
 }
 
-void perft_test(int depth, Board *board) {
-    std::cout << "\n   --- PERFT TEST (Depth: " << depth << ") ---\n";
+long long uci_perft(Board *board, int depth) {
+    if (depth == 0) {
+        return 1;
+    }
 
     Moves move_list[1];
     generate_moves(board, move_list);
 
-    long long start = clock();
-    long long nodes = 0;
+    long long total = 0;
 
     for (int i = 0; i < move_list->count; i++) {
         Board copy = *board;
 
-        if (!make_move(board, move_list->moves[i], 0)) continue;
+        if (!make_move(board, move_list->moves[i], 0)) {
+            continue;
+        }
 
-        long long cumulative_nodes = perft_driver(depth - 1, board);
-        nodes += cumulative_nodes;
+        long long nodes = perft_driver(depth - 1, board);
+        total += nodes;
 
         *board = copy;
 
-        std::cout << "   " << Board::int_to_sq(get_move_source(move_list->moves[i]))
-                << Board::int_to_sq(get_move_target(move_list->moves[i]))
-                << ": " << cumulative_nodes << "\n";
+        std::cout << "info string "
+                  << Board::int_to_sq(get_move_source(move_list->moves[i]))
+                  << Board::int_to_sq(get_move_target(move_list->moves[i]))
+                  << " " << nodes << std::endl;
     }
 
-    long long end = clock();
-    std::cout << "\n   Nodes visited: " << nodes << "\n";
-    std::cout << "   Time: " << (end - start) << " ms\n";
-    std::cout << "   Speed: " << ((nodes * 1000) / (end - start + 1)) << " nodes/s\n";
+    return total;
 }

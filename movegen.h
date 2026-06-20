@@ -21,8 +21,5 @@ int is_square_attacked(int square, int side, const Board* board);
 
 int make_move(Board* board, int move, int capture_only);
 
-// Recursive function to count leaf nodes
 long long perft_driver(int depth, Board *board);
-
-// Function to print detailed perft results
-void perft_test(int depth, Board *board);
+long long uci_perft(Board *board, int depth);
