@@ -33,6 +33,9 @@ private:
     static constexpr int NULL_MOVE_R = 3;
     static constexpr int CHECK_EXT = 1;
     static constexpr int ASPIRATION_WINDOW = 50;
+    static constexpr int MAX_PLY = 128;
+    static constexpr int KILLER_SCORE_1 = 900000;
+    static constexpr int KILLER_SCORE_2 = 800000;
 
     static const int piece_values[12];
 
@@ -45,6 +48,7 @@ private:
     bool stop_search_ = false;
     int follow_pv_move_ = 0;
     int current_tt_move_ = 0;
+    int killer_moves_[MAX_PLY][2] = {};
     long long nodes_ = 0;
     long long search_start_ms_ = 0;
     int search_time_limit_ms_ = -1;
@@ -58,12 +62,14 @@ private:
     int draw_score(const Board* board) const;
     static int get_victim_piece(const Board* board, int square);
     static int see(const Board* board, int move);
-    int score_move(int move, const Board* board) const;
-    void sort_moves(Moves* move_list, const Board* board);
+    void clear_killers();
+    void update_killer(int ply, int move);
+    int score_move(int move, const Board* board, int ply) const;
+    void sort_moves(Moves* move_list, const Board* board, int ply);
     int build_pv(const Board* board, int* pv, int max_len) const;
     void print_search_info(const Board* board, int depth, int score, long long elapsed) const;
     int quiescence(int alpha, int beta, int ply, Board* board);
-    static int compute_lmr(int depth, int moves_searched, int move, int check);
+    static int compute_lmr(int depth, int moves_searched, int move, bool skip_lmr);
     int negamax(int alpha, int beta, int depth, int ply, Board* board);
     int search_root(Board* board, int depth, int alpha, int beta);
     int search_root_aspiration(Board* board, int depth, int prev_score);

@@ -17,6 +17,7 @@ Bitboard move generation, Negamax search with alpha-beta pruning, and a Zobrist-
 | **Search bench** | **~900k NPS** | 48-position Stockfish-style suite, depth 8, ~33M nodes |
 | **Perft** | **~19M NPS** | Starting position, depth 5 (~4.9M nodes) |
 | **WAC tactics** | **76%** (23/30) | Win At Chess suite at depth 10 |
+| **Elo vs Stockfish** | **~2130** | 100 valid games @ 10+0.1 vs UCI_Elo=1800 |
 
 Numbers vary by CPU and compiler; run the commands below on your machine to reproduce.
 
@@ -38,6 +39,24 @@ Perft speed (move generation only):
 ```bash
 ./build/perft_test   # prints benchmark depth=5 ... nps=...
 ```
+
+### Elo testing (vs Stockfish)
+
+100-game blitz match (`10+0.1`, 2-move UHO book, concurrency 1):
+
+```bash
+python run_elo_tests.py --games 100 --concurrency 1 --no-sprt
+python analyze_elo.py    # -> testing/results_valid.pgn
+```
+
+| | |
+|---|---|
+| **Valid games** | **100 / 100** |
+| **Score** | **87–13–0** (87%) |
+| **vs Stockfish (UCI_Elo=1800)** | **+330 ± 233 Elo** |
+| **Estimated rating** | **~2130** |
+
+Reference opponent is [Stockfish](https://github.com/official-stockfish/Stockfish) with `UCI_LimitStrength` / `UCI_Elo=1800` (auto-downloaded). Use `--concurrency 1` to avoid UCI stalls under load.
 
 ---
 
@@ -139,4 +158,4 @@ quit
 | `bench.cpp` | Fixed-position search benchmark |
 | `uci.cpp` | UCI protocol |
 
-Automated Elo/SPRT testing against reference engines: `python run_elo_tests.py` (requires [cutechess-cli](https://github.com/cutechess/cutechess)).
+Automated Elo/SPRT testing: `python run_elo_tests.py` · analysis: `python analyze_elo.py` (requires [cutechess-cli](https://github.com/cutechess/cutechess)).

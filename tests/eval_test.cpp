@@ -45,6 +45,12 @@ static const EvalCase EVAL_CASES[] = {
         "6kq1/5ppp/8/8/8/8/5PPP/4K3 w - - 0 1",
         10,
     },
+    {
+        "central king beats edge king in endgame",
+        "8/8/8/8/4K3/8/8/k7 w - - 0 1",
+        "8/8/8/7K/8/8/8/k7 w - - 0 1",
+        20,
+    },
 };
 
 static int eval_fen(const char* fen) {

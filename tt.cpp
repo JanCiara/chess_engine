@@ -1,7 +1,7 @@
 #include "tt.h"
 
+#include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <random>
 
 #define TT_SIZE (1 << 20)
@@ -105,7 +105,7 @@ void init_zobrist() {
 }
 
 void clear_tt() {
-    std::memset(tt_table, 0, sizeof(tt_table));
+    std::fill(std::begin(tt_table), std::end(tt_table), TTEntry{});
 }
 
 U64 compute_hash(const Board* board) {

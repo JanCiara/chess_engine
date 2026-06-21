@@ -237,7 +237,25 @@ int Search::see(const Board* board, int move) {
     return gain[0];
 }
 
-int Search::score_move(int move, const Board* board) const {
+void Search::clear_killers() {
+    for (int i = 0; i < MAX_PLY; i++) {
+        killer_moves_[i][0] = 0;
+        killer_moves_[i][1] = 0;
+    }
+}
+
+void Search::update_killer(int ply, int move) {
+    if (ply < 0 || ply >= MAX_PLY) {
+        return;
+    }
+    if (killer_moves_[ply][0] == move) {
+        return;
+    }
+    killer_moves_[ply][1] = killer_moves_[ply][0];
+    killer_moves_[ply][0] = move;
+}
+
+int Search::score_move(int move, const Board* board, int ply) const {
     if (move == follow_pv_move_) {
         return 3000000;
     }
@@ -254,10 +272,19 @@ int Search::score_move(int move, const Board* board) const {
         return 1000000 + see(board, move);
     }
 
+    if (ply >= 0 && ply < MAX_PLY) {
+        if (move == killer_moves_[ply][0]) {
+            return KILLER_SCORE_1;
+        }
+        if (move == killer_moves_[ply][1]) {
+            return KILLER_SCORE_2;
+        }
+    }
+
     return 0;
 }
 
-void Search::sort_moves(Moves* move_list, const Board* board) {
+void Search::sort_moves(Moves* move_list, const Board* board, int ply) {
     struct ScoredMove {
         int move;
         int score;
@@ -268,7 +295,7 @@ void Search::sort_moves(Moves* move_list, const Board* board) {
 
     for (int i = 0; i < count; i++) {
         scored[i].move = move_list->moves[i];
-        scored[i].score = score_move(move_list->moves[i], board);
+        scored[i].score = score_move(move_list->moves[i], board, ply);
     }
 
     for (int i = 1; i < count; i++) {
@@ -388,7 +415,7 @@ int Search::quiescence(int alpha, int beta, int ply, Board* board) {
     generate_moves(board, move_list);
 
     int check = in_check(board);
-    sort_moves(move_list, board);
+    sort_moves(move_list, board, ply);
 
     int legal_moves = 0;
 
@@ -398,10 +425,9 @@ int Search::quiescence(int alpha, int beta, int ply, Board* board) {
         }
 
         int move = move_list->moves[i];
-        if (!check && !get_move_capture(move) && !get_move_promoted(move)) {
-            continue;
-        }
-        if (!check && get_move_capture(move) && see(board, move) < 0) {
+        const bool capture_or_promo = get_move_capture(move) || get_move_promoted(move);
+
+        if (!check && capture_or_promo && see(board, move) < 0) {
             continue;
         }
 
@@ -409,6 +435,12 @@ int Search::quiescence(int alpha, int beta, int ply, Board* board) {
         if (!make_move(board, move, &undo, 0)) {
             continue;
         }
+
+        if (!check && !capture_or_promo && !in_check(board)) {
+            undo_move(board, &undo);
+            continue;
+        }
+
         legal_moves++;
 
         rep_stack_[rep_ply_++] = board->hash_key();
@@ -432,8 +464,8 @@ int Search::quiescence(int alpha, int beta, int ply, Board* board) {
     return alpha;
 }
 
-int Search::compute_lmr(int depth, int moves_searched, int move, int check) {
-    if (check) {
+int Search::compute_lmr(int depth, int moves_searched, int move, bool skip_lmr) {
+    if (skip_lmr) {
         return 0;
     }
     if (moves_searched == 0) {
@@ -516,7 +548,7 @@ int Search::negamax(int alpha, int beta, int depth, int ply, Board* board) {
 
     Moves move_list[1];
     generate_moves(board, move_list);
-    sort_moves(move_list, board);
+    sort_moves(move_list, board, ply);
 
     int legal_moves = 0;
     int moves_searched = 0;
@@ -534,26 +566,31 @@ int Search::negamax(int alpha, int beta, int depth, int ply, Board* board) {
         legal_moves++;
 
         int move = move_list->moves[i];
-        int reduction = compute_lmr(depth, moves_searched, move, check);
-        int search_depth = depth - 1 - reduction;
-        if (search_depth < 1) {
-            search_depth = 1;
+        const bool gives_check = in_check(board);
+        const bool skip_lmr = check || gives_check;
+
+        int reduction = compute_lmr(depth, moves_searched, move, skip_lmr);
+        int child_depth = depth - 1 - reduction;
+        if (child_depth < 1) {
+            child_depth = 1;
         }
+
+        const int full_depth = depth - 1;
 
         rep_stack_[rep_ply_++] = board->hash_key();
 
         int score;
         if (reduction > 0) {
-            score = -negamax(-alpha - 1, -alpha, search_depth, ply + 1, board);
+            score = -negamax(-alpha - 1, -alpha, child_depth, ply + 1, board);
             if (score > alpha) {
-                score = -negamax(-beta, -alpha, depth - 1, ply + 1, board);
+                score = -negamax(-beta, -alpha, full_depth, ply + 1, board);
             }
         } else if (moves_searched == 0) {
-            score = -negamax(-beta, -alpha, depth - 1, ply + 1, board);
+            score = -negamax(-beta, -alpha, full_depth, ply + 1, board);
         } else {
-            score = -negamax(-alpha - 1, -alpha, depth - 1, ply + 1, board);
+            score = -negamax(-alpha - 1, -alpha, full_depth, ply + 1, board);
             if (score > alpha && score < beta) {
-                score = -negamax(-beta, -alpha, depth - 1, ply + 1, board);
+                score = -negamax(-beta, -alpha, full_depth, ply + 1, board);
             }
         }
 
@@ -566,6 +603,9 @@ int Search::negamax(int alpha, int beta, int depth, int ply, Board* board) {
             best_move_store = move_list->moves[i];
 
             if (alpha >= beta) {
+                if (!get_move_capture(move) && !get_move_promoted(move)) {
+                    update_killer(ply, move);
+                }
                 store_tt(board->hash_key(), depth, ply, beta, TT_BETA, best_move_store);
                 return beta;
             }
@@ -599,7 +639,7 @@ int Search::search_root(Board* board, int depth, int alpha, int beta) {
 
     Moves move_list[1];
     generate_moves(board, move_list);
-    sort_moves(move_list, board);
+    sort_moves(move_list, board, 0);
 
     int legal_moves = 0;
 
@@ -694,6 +734,7 @@ void Search::search_position(Board* board, const SearchLimits& limits) {
     follow_pv_move_ = 0;
     current_tt_move_ = 0;
     best_move_ = 0;
+    clear_killers();
     nodes_ = 0;
     search_start_ms_ = now_ms();
     search_time_limit_ms_ = allocate_time_ms(board, limits);
