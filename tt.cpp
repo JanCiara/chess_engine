@@ -108,6 +108,22 @@ void clear_tt() {
     std::fill(std::begin(tt_table), std::end(tt_table), TTEntry{});
 }
 
+U64 zobrist_piece_key(int piece, int square) {
+    return piece_keys[piece][square];
+}
+
+U64 zobrist_side_key() {
+    return side_key;
+}
+
+U64 zobrist_castle_key(int rights) {
+    return castle_keys[rights & 15];
+}
+
+U64 zobrist_ep_key(int square) {
+    return ep_keys[square];
+}
+
 U64 compute_hash(const Board* board) {
     U64 hash = 0;
 

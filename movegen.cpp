@@ -281,6 +281,53 @@ void generate_moves(const Board *board, Moves *move_list) {
     }
 }
 
+static U64 compute_hash_after_move(U64 old_hash, int piece, int promoted_piece,
+                                   int source_square, int target_square, int castling,
+                                   int enpassant, const Undo* undo, const Board* board) {
+    U64 key = old_hash;
+
+    key ^= zobrist_side_key();
+    key ^= zobrist_castle_key(undo->castle_rights);
+    key ^= zobrist_castle_key(board->castle_rights());
+    key ^= zobrist_ep_key(undo->en_passant == -1 ? 64 : undo->en_passant);
+    key ^= zobrist_ep_key(board->en_passant() == -1 ? 64 : board->en_passant());
+    key ^= zobrist_piece_key(piece, source_square);
+
+    if (enpassant) {
+        key ^= zobrist_piece_key(undo->captured_piece, undo->captured_square);
+    } else if (undo->captured_piece >= 0) {
+        key ^= zobrist_piece_key(undo->captured_piece, undo->captured_square);
+    }
+
+    const int placed = promoted_piece ? promoted_piece : piece;
+    key ^= zobrist_piece_key(placed, target_square);
+
+    if (castling) {
+        switch (target_square) {
+            case g1:
+                key ^= zobrist_piece_key(R, h1);
+                key ^= zobrist_piece_key(R, f1);
+                break;
+            case c1:
+                key ^= zobrist_piece_key(R, a1);
+                key ^= zobrist_piece_key(R, d1);
+                break;
+            case g8:
+                key ^= zobrist_piece_key(r, h8);
+                key ^= zobrist_piece_key(r, f8);
+                break;
+            case c8:
+                key ^= zobrist_piece_key(r, a8);
+                key ^= zobrist_piece_key(r, d8);
+                break;
+            default:
+                break;
+        }
+    }
+
+    return key;
+}
+
 int make_move(Board* board, int move, Undo* undo, int capture_only) {
     if (capture_only && !get_move_capture(move)) {
         return 0;
@@ -399,7 +446,9 @@ int make_move(Board* board, int move, Undo* undo, int capture_only) {
         return 0;
     }
 
-    board->set_hash_key(compute_hash(board));
+    board->set_hash_key(compute_hash_after_move(
+        undo->hash_key, piece, promoted_piece, source_square, target_square,
+        castling, enpassant, undo, board));
     return 1;
 }
 

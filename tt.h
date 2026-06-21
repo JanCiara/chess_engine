@@ -23,6 +23,11 @@ static_assert(alignof(TTEntry) == 16, "TTEntry must be 16-byte aligned");
 void init_zobrist();
 void clear_tt();
 U64 compute_hash(const Board* board);
+
+U64 zobrist_piece_key(int piece, int square);
+U64 zobrist_side_key();
+U64 zobrist_castle_key(int rights);
+U64 zobrist_ep_key(int square);
 TTFlag probe_tt(const Board* board, U64 key, int depth, int ply, int alpha, int beta, int* score, int* move);
 int probe_tt_move(const Board* board, U64 key);
 void store_tt(U64 key, int depth, int ply, int score, TTFlag flag, int move);

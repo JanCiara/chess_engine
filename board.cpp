@@ -7,18 +7,14 @@
 #include "tt.h"
 
 Board::Board() {
+    std::memset(mailbox_, -1, sizeof(mailbox_));
     init_start_position();
     update_occupancies();
     hash_key_ = compute_hash(this);
 }
 
 int Board::piece_at(int square) const {
-    for (int piece = P; piece <= k; piece++) {
-        if (piece_on(piece, square)) {
-            return piece;
-        }
-    }
-    return -1;
+    return mailbox_[square];
 }
 
 void Board::sq_to_chars(int square, char out[2]) {
@@ -29,9 +25,17 @@ void Board::sq_to_chars(int square, char out[2]) {
 void Board::apply_null_move(NullUndo* undo) {
     undo->hash_key = hash_key_;
     undo->en_passant = en_passant_;
+
+    U64 key = hash_key_;
+    key ^= zobrist_side_key();
+    if (en_passant_ != -1) {
+        key ^= zobrist_ep_key(en_passant_);
+        key ^= zobrist_ep_key(64);
+    }
+
     flip_side();
     clear_en_passant();
-    set_hash_key(compute_hash(this));
+    hash_key_ = key;
 }
 
 void Board::undo_null_move(const NullUndo* undo) {
@@ -155,6 +159,7 @@ void Board::print_board() const {
 
 void Board::parseFEN(const std::string& fen) {
     memset(bitboards_, 0, sizeof(bitboards_));
+    memset(mailbox_, -1, sizeof(mailbox_));
     memset(occupancies_, 0, sizeof(occupancies_));
 
 

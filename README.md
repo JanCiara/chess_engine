@@ -2,7 +2,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/JanCiara/chess_engine/ci.yml?branch=main&label=CI)](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml)
 
-**C++20 UCI chess engine — ~900k NPS search benchmark (Release, depth 8)**
+**C++20 UCI chess engine — bitboard movegen, Negamax search, Zobrist TT**
 
 Bitboard move generation, Negamax search with alpha-beta pruning, and a Zobrist-backed transposition table. Built for speed and correctness, with regression tests on every push.
 
@@ -14,31 +14,34 @@ Bitboard move generation, Negamax search with alpha-beta pruning, and a Zobrist-
 
 | Benchmark | Result | Notes |
 |-----------|--------|-------|
-| **Search bench** | **~900k NPS** | 48-position Stockfish-style suite, depth 8, ~33M nodes |
-| **Perft** | **~19M NPS** | Starting position, depth 5 (~4.9M nodes) |
+| **Search bench** | **~22M nodes @ depth 8** | 48-position Stockfish-style suite; NPS depends on CPU (see below) |
+| **Perft** | **~4.9M nodes @ depth 5** | Starting position; movegen-only speed varies by CPU |
 | **WAC tactics** | **76%** (23/30) | Win At Chess suite at depth 10 |
 | **Elo vs Stockfish** | **~2130** | 100 valid games @ 10+0.1 vs UCI_Elo=1800 |
 
-Numbers vary by CPU and compiler; run the commands below on your machine to reproduce.
+NPS and wall-clock times vary by CPU, compiler, and `-march=native` / LTO. The **node counts** above are fixed regression baselines — if search logic changes, update `tests/bench_test.cpp` and re-run the suite.
 
 ```
 bench 8
 ```
 
-Example output:
+Example output (Release, typical modern desktop):
 
 ```
 ===========================
-Total time (ms) : 36557
-Nodes searched  : 33096264
-Nodes/second    : 905333
+Total time (ms) : 5700
+Nodes searched  : 21885647
+Nodes/second    : 3837567
 ```
 
 Perft speed (move generation only):
 
 ```bash
 ./build/perft_test   # prints benchmark depth=5 ... nps=...
+# Windows: build\Release\perft_test.exe
 ```
+
+Example: `benchmark depth=5 nodes=4865609 time_ms=114 nps=42680780` (Release, MSVC, recent CPU).
 
 ### Elo testing (vs Stockfish)
 
@@ -62,13 +65,19 @@ Reference opponent is [Stockfish](https://github.com/official-stockfish/Stockfis
 
 ## Architecture
 
-**Bitboards** — Board state uses 64-bit bitboards per piece type. Sliders use magic bitboards (precomputed attack tables); leapers and pawns use lookup tables. Moves are generated incrementally with make/unmake and a compact undo stack.
+**Bitboards** — Board state uses 64-bit bitboards per piece type plus a square mailbox for O(1) `piece_at`. Sliders use magic bitboards (precomputed attack tables); leapers and pawns use lookup tables. Moves are generated incrementally with make/unmake and a compact undo stack.
 
-**Negamax** — Iterative deepening with alpha-beta pruning, aspiration windows, null-move pruning, late move reductions (LMR), check extensions, and quiescence search (captures and promotions). Move ordering: hash move from TT, PV move from the previous iteration, MVV-LVA for captures.
+**Zobrist hashing** — Position hash is updated incrementally on make/null-move (full recompute only when loading FEN or constructing the start position). Keys drive the transposition table and repetition detection in search.
+
+**Negamax** — Iterative deepening with alpha-beta pruning, aspiration windows, null-move pruning, late move reductions (LMR), check extensions, and quiescence search (captures and promotions). Move ordering: PV move, TT move, SEE for captures/promotions, killer moves for quiet cutoffs.
 
 **Transposition table (TT)** — 16-byte entries (4 per cache line) keyed by Zobrist hash; stores depth, score, bound flag, and best move for cutoffs and move ordering.
 
-Additional features: piece-square evaluation, 50-move / threefold / insufficient-material draw detection, UCI time management (`wtime`, `btime`, `movetime`, increments).
+**Evaluation** — Phased MG/EG piece-square tables with interpolation, pawn structure, mobility, and king safety.
+
+**Draw rules** — 50-move rule, insufficient material, repetition within the current search (plus game history from UCI `position`).
+
+**UCI** — Time management (`wtime`, `btime`, `movetime`, increments), search on a worker thread with cooperative `stop`.
 
 ---
 
@@ -109,7 +118,7 @@ On Windows, add `-C Release` to `ctest`. CI publishes bench and perft numbers in
 |--------|----------------|
 | `unit_test` | Bitboards, move encoding, FEN/EPD, Zobrist, draw rules, TT |
 | `perft_test` | Perft node counts + perft NPS |
-| `bench_test` | Search bench node count at depth 8 (regression) |
+| `bench_test` | Search bench node count at depth 8 (`21885647` nodes baseline) |
 | `wac_test` | WAC tactical suite at depth 10 |
 | `eval_test` | Evaluation score regression |
 
@@ -121,6 +130,7 @@ Connect to any UCI GUI (Arena, Cute Chess, Lichess Bot, etc.):
 
 ```bash
 ./build/chess_engine
+# Windows: build\Release\chess_engine.exe
 ```
 
 ```
@@ -149,13 +159,32 @@ quit
 
 | File | Role |
 |------|------|
-| `board.cpp` | Board state, FEN parsing |
-| `movegen.cpp` | Bitboard movegen, magic bitboards, perft |
-| `evaluate.cpp` | Piece-square tables |
-| `search.cpp` | Negamax, iterative deepening |
-| `tt.cpp` | Zobrist hashing, transposition table |
+| `board.cpp` | Board state, mailbox, FEN parsing |
+| `movegen.cpp` | Bitboard movegen, magic bitboards, make/unmake, perft |
+| `evaluate.cpp` | Phased evaluation (PST, structure, mobility, king safety) |
+| `search.cpp` | Negamax, iterative deepening, SEE, killers |
+| `tt.cpp` | Zobrist keys, incremental hash helpers, transposition table |
 | `draw.cpp` | Draw detection |
 | `bench.cpp` | Fixed-position search benchmark |
 | `uci.cpp` | UCI protocol |
 
 Automated Elo/SPRT testing: `python run_elo_tests.py` · analysis: `python analyze_elo.py` (requires [cutechess-cli](https://github.com/cutechess/cutechess)).
+
+---
+
+## Refinement (no new features)
+
+Items worth polishing in the existing codebase — tuning and quality, not scope creep:
+
+| Area | What to improve |
+|------|-----------------|
+| **Transposition table** | Depth-preferred replacement instead of always overwriting; optional age/generation bucket |
+| **Evaluation** | Hand-tune MG/EG weights; reduce duplicated white/black loops in `evaluate.cpp`; target higher WAC pass rate at depth 10 |
+| **Search tuning** | Aspiration window size, LMR thresholds, null-move depth/reduction — tune against fixed suites without changing algorithms |
+| **Time management** | `allocate_time_ms` fractions and safety margins; validate under blitz increments with Elo script |
+| **Repetition** | Align search-side repetition with full game history from UCI (today partially covered) |
+| **FEN / UCI input** | Replace silent `std::cout` on bad FEN with clear failure; validate token count and castling/en passant fields |
+| **Code consistency** | Unify comment language (PL/EN mix today); small cleanups in `search_root` (duplicate best-move assignment) |
+| **Bench suite** | Positions 16–48 repeat the same FEN — trim duplicates or document why they stress TT/cache |
+| **Tests** | Add make/unmake hash regression (`hash_key == compute_hash` after random legal moves); optional perft in `unit_test` CI path |
+| **Documentation** | Keep `EXPECTED_BENCH_NODES` in README and `bench_test.cpp` in sync after any search change |

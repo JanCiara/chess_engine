@@ -42,8 +42,16 @@ public:
     void set_hash_key(U64 key) { hash_key_ = key; }
 
     U64 bitboard(int piece) const { return bitboards_[piece]; }
-    void pop_piece_bit(int piece, int square) { pop_bit(bitboards_[piece], square); }
-    void set_piece_bit(int piece, int square) { set_bit(bitboards_[piece], square); }
+    void pop_piece_bit(int piece, int square) {
+        pop_bit(bitboards_[piece], square);
+        if (mailbox_[square] == piece) {
+            mailbox_[square] = -1;
+        }
+    }
+    void set_piece_bit(int piece, int square) {
+        set_bit(bitboards_[piece], square);
+        mailbox_[square] = piece;
+    }
     bool piece_on(int piece, int square) const { return get_bit(bitboards_[piece], square); }
 
     U64 occupancy(int index) const { return occupancies_[index]; }
@@ -76,6 +84,7 @@ public:
 
 private:
     U64 bitboards_[12] = {0ULL};
+    int mailbox_[64];
     U64 occupancies_[3] = {0ULL};
     int side_ = 0;
     int en_passant_ = -1;
