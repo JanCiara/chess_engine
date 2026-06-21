@@ -601,6 +601,8 @@ int Search::search_root(Board* board, int depth, int alpha, int beta) {
     generate_moves(board, move_list);
     sort_moves(move_list, board);
 
+    int legal_moves = 0;
+
     for (int i = 0; i < move_list->count; i++) {
         if (stop_search_) {
             break;
@@ -610,6 +612,7 @@ int Search::search_root(Board* board, int depth, int alpha, int beta) {
         if (!make_move(board, move_list->moves[i], &undo, 0)) {
             continue;
         }
+        legal_moves++;
 
         rep_stack_[rep_ply_++] = board->hash_key();
         int score = -negamax(-beta, -alpha, depth - 1, 1, board);
@@ -626,6 +629,13 @@ int Search::search_root(Board* board, int depth, int alpha, int beta) {
             alpha = score;
             iteration_best_move = move_list->moves[i];
         }
+    }
+
+    if (legal_moves == 0) {
+        if (in_check(board)) {
+            return -MATE_SCORE;
+        }
+        return 0;
     }
 
     if (iteration_best_move != 0 && !stop_search_) {
@@ -649,10 +659,16 @@ int Search::search_root_aspiration(Board* board, int depth, int prev_score) {
     while (true) {
         int score = search_root(board, depth, alpha, beta);
         if (score <= alpha) {
+            if (alpha <= -INF + 1) {
+                return score;
+            }
             alpha = -INF;
             continue;
         }
         if (score >= beta) {
+            if (beta >= INF - 1) {
+                return score;
+            }
             beta = INF;
             continue;
         }
@@ -695,7 +711,7 @@ void Search::search_position(Board* board, const SearchLimits& limits) {
         effective.depth = 6;
     }
 
-    int max_depth = effective.depth > 0 ? effective.depth : 64;
+    int max_depth = effective.depth > 0 ? effective.depth : 32;
     int last_score = 0;
 
     for (int depth = 1; depth <= max_depth; depth++) {
@@ -733,6 +749,14 @@ void Search::search_position(Board* board, const SearchLimits& limits) {
 
     if (limits.quiet) {
         return;
+    }
+
+    if (best_move_ == 0) {
+        Moves move_list[1];
+        generate_moves(board, move_list);
+        if (move_list->count > 0) {
+            best_move_ = move_list->moves[0];
+        }
     }
 
     if (best_move_ == 0) {

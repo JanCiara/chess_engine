@@ -79,6 +79,13 @@ OPENING_BOOK_NAME = "2moves_v1.epd"
 TSCP_EXE_URL = "https://www.tckerrigan.com/Chess/TSCP/tscp181.exe.zip"
 TSCP_EXE_NAME = "tscp181.exe"
 
+STOCKFISH_ELO = 1800
+STOCKFISH_ASSET_PATTERNS = {
+    "Windows": [r"stockfish-windows-x86-64-avx2\.zip$", r"stockfish-windows-x86-64\.zip$"],
+    "Linux": [r"stockfish-ubuntu-x86-64-avx2\.tar$", r"stockfish-ubuntu-x86-64\.tar$"],
+    "Darwin": [r"stockfish-macos-x86-64-avx2\.tar$", r"stockfish-macos-x86-64\.tar$"],
+}
+
 
 def log(msg: str) -> None:
     print(msg, flush=True)
@@ -114,8 +121,13 @@ def download_url(url: str, dest: Path, insecure: bool = False) -> None:
     dest.write_bytes(data)
 
 
-def github_release_assets(tag: str, insecure: bool) -> dict[str, str]:
-    api = f"https://api.github.com/repos/cutechess/cutechess/releases/tags/{tag}"
+def github_release_assets(
+    tag: str, insecure: bool, repo: str = "cutechess/cutechess"
+) -> dict[str, str]:
+    if tag == "latest":
+        api = f"https://api.github.com/repos/{repo}/releases/latest"
+    else:
+        api = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
     ctx = ssl.create_default_context()
     if insecure:
         ctx.check_hostname = False
@@ -323,6 +335,34 @@ def download_sunfish(insecure: bool) -> Path:
     return sunfish_dir
 
 
+def sunfish_launcher(sunfish_dir: Path) -> tuple[Path, list[str]]:
+    python = find_python()
+    if sys.platform == "win32":
+        launcher = sunfish_dir / "run_sunfish.cmd"
+        launcher.write_text(
+            f'@"{python}" -u "%~dp0sunfish.py"\n',
+            encoding="utf-8",
+        )
+        return launcher, [
+            f"cmd={launcher}",
+            f"dir={sunfish_dir}",
+            "name=Sunfish",
+            "proto=uci",
+        ]
+    launcher = sunfish_dir / "run_sunfish.sh"
+    launcher.write_text(
+        f'#!/bin/sh\nexec "{python}" -u "$(dirname "$0")/sunfish.py"\n',
+        encoding="utf-8",
+    )
+    launcher.chmod(launcher.stat().st_mode | 0o111)
+    return launcher, [
+        f"cmd={launcher}",
+        f"dir={sunfish_dir}",
+        "name=Sunfish",
+        "proto=uci",
+    ]
+
+
 def download_tscp(insecure: bool) -> Path:
     tscp_dir = ENGINES_DIR / "tscp"
     tscp_dir.mkdir(parents=True, exist_ok=True)
@@ -367,24 +407,104 @@ def download_opening_book(insecure: bool) -> Path:
     return book_path
 
 
+def download_stockfish(insecure: bool) -> Path:
+    sf_dir = ENGINES_DIR / "stockfish"
+    sf_dir.mkdir(parents=True, exist_ok=True)
+
+    for name in ("stockfish.exe", "stockfish"):
+        existing = sf_dir / name
+        if existing.is_file() and existing.stat().st_size > 1_000_000:
+            log(f"Stockfish ready at {existing}")
+            return existing
+
+    for existing in sf_dir.rglob("*.exe"):
+        if existing.is_file() and existing.stat().st_size > 1_000_000:
+            log(f"Stockfish ready at {existing}")
+            return existing
+
+    assets = github_release_assets("latest", insecure, repo="official-stockfish/Stockfish")
+    if not assets:
+        die("Could not fetch Stockfish release metadata from GitHub.")
+
+    system = platform.system()
+    patterns = STOCKFISH_ASSET_PATTERNS.get(system, STOCKFISH_ASSET_PATTERNS["Linux"])
+    url = pick_asset(assets, patterns)
+    if not url:
+        die(f"No Stockfish binary found for {system} in GitHub releases.")
+
+    with tempfile.TemporaryDirectory(prefix="sf-dl-") as tmp:
+        tmp_dir = Path(tmp)
+        archive_path = tmp_dir / Path(url).name
+        download_url(url, archive_path, insecure=insecure)
+
+        if archive_path.suffix == ".zip":
+            with zipfile.ZipFile(archive_path) as archive:
+                exe_members = [
+                    n
+                    for n in archive.namelist()
+                    if n.lower().endswith(".exe")
+                    and archive.getinfo(n).file_size > 1_000_000
+                ]
+                if not exe_members:
+                    die(f"no Stockfish .exe found inside {url}")
+                member = max(exe_members, key=lambda n: archive.getinfo(n).file_size)
+                target = sf_dir / ("stockfish.exe" if sys.platform == "win32" else "stockfish")
+                target.write_bytes(archive.read(member))
+                log(f"Stockfish ready at {target}")
+                return target
+        else:
+            with tarfile.open(archive_path, "r:*") as archive:
+                exe_members = [
+                    m.name
+                    for m in archive.getmembers()
+                    if m.isfile()
+                    and Path(m.name).name.lower().startswith("stockfish")
+                    and m.size > 1_000_000
+                ]
+                if not exe_members:
+                    die(f"no Stockfish binary found inside {url}")
+                member = max(exe_members, key=lambda n: archive.getmember(n).size)
+                target = sf_dir / Path(member).name
+                target.write_bytes(archive.extractfile(member).read())
+                target.chmod(target.stat().st_mode | 0o111)
+                log(f"Stockfish ready at {target}")
+                return target
+
+    die("Stockfish download failed: binary not found in archive.")
+
+
+def stockfish_ref_args(exe: Path, elo: int = STOCKFISH_ELO) -> list[str]:
+    return [
+        f"cmd={exe}",
+        f"dir={exe.parent}",
+        f"name=Stockfish-{elo}",
+        "proto=uci",
+        "option.Threads=1",
+        "option.Hash=16",
+        "option.UCI_LimitStrength=true",
+        f"option.UCI_Elo={elo}",
+    ]
+
+
 def resolve_reference_engine(reference: str, insecure: bool) -> tuple[list[str], str]:
+    if reference == "stockfish":
+        sf_exe = download_stockfish(insecure)
+        return (
+            stockfish_ref_args(sf_exe),
+            f"Stockfish @ UCI_Elo={STOCKFISH_ELO}",
+        )
+
     if reference == "sunfish":
         sunfish_dir = download_sunfish(insecure)
-        python = find_python()
+        _, ref_args = sunfish_launcher(sunfish_dir)
         return (
-            [
-                f"cmd={python}",
-                "arg=sunfish.py",
-                f"dir={sunfish_dir}",
-                "name=Sunfish",
-                "proto=uci",
-            ],
+            ref_args,
             "Sunfish (~2000 Elo at fast TC with CPython; use PyPy for ~250 Elo more)",
         )
 
     if reference == "tscp":
         if sys.platform != "win32":
-            die("TSCP auto-download is Windows-only; use --reference sunfish on Unix.")
+            die("TSCP auto-download is Windows-only; use --reference stockfish on Unix.")
         tscp_exe = download_tscp(insecure)
         return (
             [
@@ -395,9 +515,7 @@ def resolve_reference_engine(reference: str, insecure: bool) -> tuple[list[str],
             "TSCP (~1600 Elo, XBoard protocol)",
         )
 
-    if sys.platform == "win32":
-        return resolve_reference_engine("tscp", insecure)
-    return resolve_reference_engine("sunfish", insecure)
+    return resolve_reference_engine("stockfish", insecure)
 
 
 def find_chess_engine(explicit: str | None) -> Path:
@@ -453,7 +571,7 @@ def build_cutechess_command(
         "timemargin=1000",
         "restart=on",
         "-wait",
-        "100",
+        "300",
         "-concurrency",
         str(concurrency),
         "-rounds",
@@ -501,9 +619,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--reference",
-        choices=("auto", "sunfish", "tscp"),
+        choices=("auto", "stockfish", "sunfish", "tscp"),
         default="auto",
-        help="Reference opponent (default: sunfish, TSCP fallback on Windows).",
+        help="Reference opponent (default: Stockfish @ UCI_Elo=1800).",
     )
     parser.add_argument(
         "--games",
@@ -579,8 +697,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--reference-elo",
         type=int,
-        default=2000,
-        help="Sunfish reference rating for analyze-only mode (default: 2000).",
+        default=STOCKFISH_ELO,
+        help=f"Reference engine rating for analyze-only mode (default: {STOCKFISH_ELO}).",
     )
     return parser.parse_args()
 
@@ -621,14 +739,15 @@ def main() -> None:
         book = BOOKS_DIR / OPENING_BOOK_NAME
         if not book.is_file():
             die(f"opening book missing: {book} (remove --skip-download)")
-        if args.reference == "sunfish":
-            ref_args = [
-                f"cmd={find_python()}",
-                "arg=sunfish.py",
-                f"dir={ENGINES_DIR / 'sunfish'}",
-                "name=Sunfish",
-                "proto=uci",
-            ]
+        if args.reference in ("stockfish", "auto"):
+            sf_dir = ENGINES_DIR / "stockfish"
+            sf_exe = next((p for p in sf_dir.rglob("stockfish*") if p.is_file()), None)
+            if not sf_exe:
+                die(f"Stockfish not found under {sf_dir} (remove --skip-download)")
+            ref_args = stockfish_ref_args(sf_exe)
+            ref_desc = f"Stockfish @ UCI_Elo={STOCKFISH_ELO} (cached)"
+        elif args.reference == "sunfish":
+            _, ref_args = sunfish_launcher(ENGINES_DIR / "sunfish")
             ref_desc = "Sunfish (cached)"
         elif args.reference == "tscp":
             ref_args = [
@@ -678,6 +797,9 @@ def main() -> None:
         return
 
     RESULTS_PGN.parent.mkdir(parents=True, exist_ok=True)
+    for path in (RESULTS_PGN, RESULTS_PGN.with_name("results_valid.pgn")):
+        if path.exists():
+            path.unlink()
     log("Starting match (live Elo / SPRT output from cutechess-cli)...")
     log("=" * 60)
     try:

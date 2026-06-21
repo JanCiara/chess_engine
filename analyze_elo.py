@@ -9,11 +9,22 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-REFERENCE_ELO = 2000
+REFERENCE_ELO = 1800
+REFERENCE_NAME = "Stockfish"
 INVALID_TERMINATIONS = frozenset(
-    {"stalled connection", "abandoned", "disconnected", "illegal move", "time forfeit"}
+    {
+        "stalled connection",
+        "abandoned",
+        "disconnected",
+        "illegal move",
+        "time forfeit",
+        "illegal",
+    }
 )
-INVALID_LAST_MOVE = re.compile(r"disconnect|connection stall", re.IGNORECASE)
+INVALID_LAST_MOVE = re.compile(
+    r"disconnect|connection stall|illegal move|makes an illegal move",
+    re.IGNORECASE,
+)
 
 
 def split_games(pgn_text: str) -> list[str]:
@@ -75,7 +86,16 @@ def engine_score(valid_games: list[str]) -> tuple[int, int, int]:
 def elo_stats(wins: int, losses: int, draws: int, reference: int = REFERENCE_ELO) -> dict[str, float | int]:
     n = wins + losses + draws
     if n == 0:
-        return {"games": 0, "score_pct": 0.0, "elo_diff": 0.0, "elo_err": 0.0, "rating": float(reference)}
+        return {
+            "games": 0,
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "score_pct": 0.0,
+            "elo_diff": 0.0,
+            "elo_err": 0.0,
+            "rating": float(reference),
+        }
 
     score = (wins + 0.5 * draws) / n
     if score <= 0 or score >= 1:
@@ -137,7 +157,7 @@ def format_report(stats: dict, reference_elo: int = REFERENCE_ELO) -> str:
 
     if math.isfinite(stats["elo_diff"]):
         lines.append(
-            f"  vs Sunfish {reference_elo}: {stats['elo_diff']:+.0f} +/- {stats['elo_err']:.0f} Elo"
+            f"  vs {REFERENCE_NAME} {reference_elo}: {stats['elo_diff']:+.0f} +/- {stats['elo_err']:.0f} Elo"
         )
         lines.append(
             f"  Estimated rating: ~{stats['rating']:.0f} +/- {stats['elo_err']:.0f}"
@@ -155,7 +175,7 @@ def format_report(stats: dict, reference_elo: int = REFERENCE_ELO) -> str:
         bound = max(0.01, center - margin)
         elo_bound = -400 * math.log10(1 / bound - 1)
         lines.append(
-            f"  vs Sunfish {reference_elo}: >{elo_bound:+.0f} Elo (95% lower bound, n={n})"
+            f"  vs {REFERENCE_NAME} {reference_elo}: >{elo_bound:+.0f} Elo (95% lower bound, n={n})"
         )
         lines.append(
             f"  Estimated rating: >{reference_elo + elo_bound:.0f} (n={n}, not statistically reliable)"
@@ -164,7 +184,7 @@ def format_report(stats: dict, reference_elo: int = REFERENCE_ELO) -> str:
         bound = min(0.99, center + margin)
         elo_bound = -400 * math.log10(1 / bound - 1)
         lines.append(
-            f"  vs Sunfish {reference_elo}: <{elo_bound:+.0f} Elo (95% upper bound, n={n})"
+            f"  vs {REFERENCE_NAME} {reference_elo}: <{elo_bound:+.0f} Elo (95% upper bound, n={n})"
         )
         lines.append(
             f"  Estimated rating: <{reference_elo + elo_bound:.0f} (n={n}, not statistically reliable)"
