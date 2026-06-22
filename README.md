@@ -4,7 +4,7 @@
 
 **C++20 UCI chess engine — bitboard movegen, Negamax search, Zobrist TT**
 
-Bitboard move generation, Negamax search with alpha-beta pruning, and a Zobrist-backed transposition table. Built for speed and correctness, with regression tests on every push.
+Bitboard move generation, Negamax search with alpha-beta pruning, and a Zobrist-backed transposition table. Built for speed and correctness, with regression tests on every push (Linux and Windows).
 
 **Author:** janek
 
@@ -16,7 +16,7 @@ Bitboard move generation, Negamax search with alpha-beta pruning, and a Zobrist-
 |-----------|--------|-------|
 | **Search bench** | **~22M nodes @ depth 8** | 48-position Stockfish-style suite; NPS depends on CPU (see below) |
 | **Perft** | **~4.9M nodes @ depth 5** | Starting position; movegen-only speed varies by CPU |
-| **WAC tactics** | **76%** (23/30) | Win At Chess suite at depth 10 |
+| **WAC tactics** | **70%** (21/30) | Win At Chess suite at depth 10 |
 | **Elo vs Stockfish** | **~2130** | 100 valid games @ 10+0.1 vs UCI_Elo=1800 |
 
 NPS and wall-clock times vary by CPU, compiler, and `-march=native` / LTO. The **node counts** above are fixed regression baselines — if search logic changes, update `tests/bench_test.cpp` and re-run the suite.
@@ -41,7 +41,7 @@ Perft speed (move generation only):
 # Windows: build\Release\perft_test.exe
 ```
 
-Example: `benchmark depth=5 nodes=4865609 time_ms=114 nps=42680780` (Release, MSVC, recent CPU).
+Example: `benchmark depth=5 nodes=4865609 time_ms=107 nps=45472981` (Release, MSVC, recent CPU).
 
 ### Elo testing (vs Stockfish)
 
@@ -50,6 +50,7 @@ Example: `benchmark depth=5 nodes=4865609 time_ms=114 nps=42680780` (Release, MS
 ```bash
 python run_elo_tests.py --games 100 --concurrency 1 --no-sprt
 python analyze_elo.py    # -> testing/results_valid.pgn
+# or: python run_elo_tests.py --analyze-only
 ```
 
 | | |
@@ -65,7 +66,7 @@ Reference opponent is [Stockfish](https://github.com/official-stockfish/Stockfis
 
 ## Architecture
 
-**Bitboards** — Board state uses 64-bit bitboards per piece type plus a square mailbox for O(1) `piece_at`. Sliders use magic bitboards (precomputed attack tables); leapers and pawns use lookup tables. Moves are generated incrementally with make/unmake and a compact undo stack.
+**Bitboards** — Board state uses 64-bit bitboards per piece type plus a square mailbox for O(1) `piece_at`. Sliders use magic bitboards (precomputed attack tables in `attacks_data.cpp`); leapers and pawns use lookup tables. Moves are generated incrementally with make/unmake and a compact undo stack.
 
 **Zobrist hashing** — Position hash is updated incrementally on make/null-move (full recompute only when loading FEN or constructing the start position). Keys drive the transposition table and repetition detection in search.
 
@@ -105,6 +106,21 @@ cmake --build build --config Release
 
 Binary: `build/Release/chess_engine.exe`
 
+### Profile-guided optimization (optional)
+
+```bash
+# 1. Instrumented build
+cmake -B build-pgo -DCMAKE_BUILD_TYPE=Release -DENABLE_PGO=GENERATE
+cmake --build build-pgo
+# 2. Run a representative workload (bench, perft, or UCI games)
+./build-pgo/chess_engine
+# 3. Merge profiles (Clang) or use GCC defaults, then optimize build
+cmake -B build-pgo -DCMAKE_BUILD_TYPE=Release -DENABLE_PGO=USE
+cmake --build build-pgo
+```
+
+On MSVC, PGO uses `/LTCG:PGINSTRUMENT` / `/LTCG:PGOPTIMIZE`. Disable with `-DENABLE_PGO=OFF`.
+
 ### Tests
 
 ```bash
@@ -112,14 +128,14 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-On Windows, add `-C Release` to `ctest`. CI publishes bench and perft numbers in the [workflow summary](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml) on every push.
+On Windows, add `-C Release` to `ctest`. CI runs the full suite on **Linux** and **Windows** and publishes bench and perft numbers in the [workflow summary](https://github.com/JanCiara/chess_engine/actions/workflows/ci.yml) on every push.
 
 | Target | What it checks |
 |--------|----------------|
 | `unit_test` | Bitboards, move encoding, FEN/EPD, Zobrist, draw rules, TT |
 | `perft_test` | Perft node counts + perft NPS |
 | `bench_test` | Search bench node count at depth 8 (`21885647` nodes baseline) |
-| `wac_test` | WAC tactical suite at depth 10 |
+| `wac_test` | WAC tactical suite at depth 10 (informational score) |
 | `eval_test` | Evaluation score regression |
 
 ---
@@ -159,16 +175,20 @@ quit
 
 | File | Role |
 |------|------|
+| `main.cpp` | Entry point |
+| `uci.cpp` | UCI protocol, search thread |
 | `board.cpp` | Board state, mailbox, FEN parsing |
 | `movegen.cpp` | Bitboard movegen, magic bitboards, make/unmake, perft |
+| `attacks_data.cpp` | Precomputed magic bitboard attack tables |
 | `evaluate.cpp` | Phased evaluation (PST, structure, mobility, king safety) |
 | `search.cpp` | Negamax, iterative deepening, SEE, killers |
 | `tt.cpp` | Zobrist keys, incremental hash helpers, transposition table |
 | `draw.cpp` | Draw detection |
 | `bench.cpp` | Fixed-position search benchmark |
-| `uci.cpp` | UCI protocol |
+| `epd.cpp` | EPD parsing (WAC suite, test positions) |
+| `tools/generate_attacks.py` | Regenerate `attacks_data.cpp` |
 
-Automated Elo/SPRT testing: `python run_elo_tests.py` · analysis: `python analyze_elo.py` (requires [cutechess-cli](https://github.com/cutechess/cutechess)).
+Automated Elo/SPRT testing: `python run_elo_tests.py` · analysis: `python analyze_elo.py` (requires [cutechess-cli](https://github.com/cutechess/cutechess), auto-downloaded).
 
 ---
 
@@ -179,7 +199,7 @@ Items worth polishing in the existing codebase — tuning and quality, not scope
 | Area | What to improve |
 |------|-----------------|
 | **Transposition table** | Depth-preferred replacement instead of always overwriting; optional age/generation bucket |
-| **Evaluation** | Hand-tune MG/EG weights; reduce duplicated white/black loops in `evaluate.cpp`; target higher WAC pass rate at depth 10 |
+| **Evaluation** | Hand-tune MG/EG weights; reduce duplicated white/black loops in `evaluate.cpp`; raise WAC pass rate above 70% at depth 10 |
 | **Search tuning** | Aspiration window size, LMR thresholds, null-move depth/reduction — tune against fixed suites without changing algorithms |
 | **Time management** | `allocate_time_ms` fractions and safety margins; validate under blitz increments with Elo script |
 | **Repetition** | Align search-side repetition with full game history from UCI (today partially covered) |
